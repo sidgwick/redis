@@ -18,7 +18,8 @@
 #include <stdint.h>
 #include <string.h>
 
-static inline uint64_t ROTL64(uint64_t x, int r) {
+static inline uint64_t ROTL64(uint64_t x, int r)
+{
     return (x << r) | (x >> (64 - r));
 }
 
@@ -36,9 +37,9 @@ static inline uint64_t ROTL64(uint64_t x, int r) {
  * 3. Cross-influence between h1 and h2.
  * 4. Domain separation to prevent related-key attacks.
  */
-void secure_pair_mixer_128(uint64_t salt0, uint64_t salt1,
-                          uint64_t id1_in, uint64_t id2_in, uint64_t level,
-                          uint64_t* out_h1, uint64_t* out_h2) {
+void secure_pair_mixer_128(uint64_t salt0, uint64_t salt1, uint64_t id1_in, uint64_t id2_in, uint64_t level,
+                           uint64_t *out_h1, uint64_t *out_h2)
+{
     // Order independence (A -> B links should hash as B -> A links).
     uint64_t id_a = (id1_in < id2_in) ? id1_in : id2_in;
     uint64_t id_b = (id1_in < id2_in) ? id2_in : id1_in;

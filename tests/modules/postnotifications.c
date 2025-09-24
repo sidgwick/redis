@@ -29,38 +29,45 @@
 #define _DEFAULT_SOURCE /* For usleep */
 
 #include "redismodule.h"
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 
-static void KeySpace_PostNotificationStringFreePD(void *pd) {
+static void KeySpace_PostNotificationStringFreePD(void *pd)
+{
     RedisModule_FreeString(NULL, pd);
 }
 
-static void KeySpace_PostNotificationReadKey(RedisModuleCtx *ctx, void *pd) {
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, "get", "!s", pd);
+static void KeySpace_PostNotificationReadKey(RedisModuleCtx *ctx, void *pd)
+{
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, "get", "!s", pd);
     RedisModule_FreeCallReply(rep);
 }
 
-static void KeySpace_PostNotificationString(RedisModuleCtx *ctx, void *pd) {
+static void KeySpace_PostNotificationString(RedisModuleCtx *ctx, void *pd)
+{
     REDISMODULE_NOT_USED(ctx);
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, "incr", "!s", pd);
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, "incr", "!s", pd);
     RedisModule_FreeCallReply(rep);
 }
 
-static int KeySpace_NotificationExpired(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key){
+static int KeySpace_NotificationExpired(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key)
+{
     REDISMODULE_NOT_USED(type);
     REDISMODULE_NOT_USED(event);
     REDISMODULE_NOT_USED(key);
 
     RedisModuleString *new_key = RedisModule_CreateString(NULL, "expired", 7);
-    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key, KeySpace_PostNotificationStringFreePD);
-    if (res == REDISMODULE_ERR) KeySpace_PostNotificationStringFreePD(new_key);
+    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key,
+                                                 KeySpace_PostNotificationStringFreePD);
+    if (res == REDISMODULE_ERR)
+        KeySpace_PostNotificationStringFreePD(new_key);
     return REDISMODULE_OK;
 }
 
-static int KeySpace_NotificationEvicted(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key){
+static int KeySpace_NotificationEvicted(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key)
+{
     REDISMODULE_NOT_USED(type);
     REDISMODULE_NOT_USED(event);
     REDISMODULE_NOT_USED(key);
@@ -76,12 +83,15 @@ static int KeySpace_NotificationEvicted(RedisModuleCtx *ctx, int type, const cha
     }
 
     RedisModuleString *new_key = RedisModule_CreateString(NULL, "evicted", 7);
-    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key, KeySpace_PostNotificationStringFreePD);
-    if (res == REDISMODULE_ERR) KeySpace_PostNotificationStringFreePD(new_key);
+    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key,
+                                                 KeySpace_PostNotificationStringFreePD);
+    if (res == REDISMODULE_ERR)
+        KeySpace_PostNotificationStringFreePD(new_key);
     return REDISMODULE_OK;
 }
 
-static int KeySpace_NotificationString(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key){
+static int KeySpace_NotificationString(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key)
+{
     REDISMODULE_NOT_USED(ctx);
     REDISMODULE_NOT_USED(type);
     REDISMODULE_NOT_USED(event);
@@ -103,12 +113,16 @@ static int KeySpace_NotificationString(RedisModuleCtx *ctx, int type, const char
         new_key = RedisModule_CreateStringPrintf(NULL, "string_changed{%s}", key_str);
     }
 
-    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key, KeySpace_PostNotificationStringFreePD);
-    if (res == REDISMODULE_ERR) KeySpace_PostNotificationStringFreePD(new_key);
+    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationString, new_key,
+                                                 KeySpace_PostNotificationStringFreePD);
+    if (res == REDISMODULE_ERR)
+        KeySpace_PostNotificationStringFreePD(new_key);
     return REDISMODULE_OK;
 }
 
-static int KeySpace_LazyExpireInsidePostNotificationJob(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key){
+static int KeySpace_LazyExpireInsidePostNotificationJob(RedisModuleCtx *ctx, int type, const char *event,
+                                                        RedisModuleString *key)
+{
     REDISMODULE_NOT_USED(ctx);
     REDISMODULE_NOT_USED(type);
     REDISMODULE_NOT_USED(event);
@@ -119,13 +133,17 @@ static int KeySpace_LazyExpireInsidePostNotificationJob(RedisModuleCtx *ctx, int
         return REDISMODULE_OK;
     }
 
-    RedisModuleString *new_key = RedisModule_CreateString(NULL, key_str + 5, strlen(key_str) - 5);;
-    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationReadKey, new_key, KeySpace_PostNotificationStringFreePD);
-    if (res == REDISMODULE_ERR) KeySpace_PostNotificationStringFreePD(new_key);
+    RedisModuleString *new_key = RedisModule_CreateString(NULL, key_str + 5, strlen(key_str) - 5);
+    ;
+    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_PostNotificationReadKey, new_key,
+                                                 KeySpace_PostNotificationStringFreePD);
+    if (res == REDISMODULE_ERR)
+        KeySpace_PostNotificationStringFreePD(new_key);
     return REDISMODULE_OK;
 }
 
-static int KeySpace_NestedNotification(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key){
+static int KeySpace_NestedNotification(RedisModuleCtx *ctx, int type, const char *event, RedisModuleString *key)
+{
     REDISMODULE_NOT_USED(ctx);
     REDISMODULE_NOT_USED(type);
     REDISMODULE_NOT_USED(event);
@@ -138,18 +156,20 @@ static int KeySpace_NestedNotification(RedisModuleCtx *ctx, int type, const char
 
     /* This test was only meant to check REDISMODULE_OPTIONS_ALLOW_NESTED_KEYSPACE_NOTIFICATIONS.
      * In general it is wrong and discourage to perform any writes inside a notification callback.  */
-    RedisModuleString *new_key = RedisModule_CreateString(NULL, key_str + 11, strlen(key_str) - 11);;
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, "set", "!sc", new_key, "1");
+    RedisModuleString *new_key = RedisModule_CreateString(NULL, key_str + 11, strlen(key_str) - 11);
+    ;
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, "set", "!sc", new_key, "1");
     RedisModule_FreeCallReply(rep);
     RedisModule_FreeString(NULL, new_key);
     return REDISMODULE_OK;
 }
 
-static void *KeySpace_PostNotificationsAsyncSetInner(void *arg) {
+static void *KeySpace_PostNotificationsAsyncSetInner(void *arg)
+{
     RedisModuleBlockedClient *bc = arg;
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(bc);
     RedisModule_ThreadSafeContextLock(ctx);
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, "set", "!cc", "string_x", "1");
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, "set", "!cc", "string_x", "1");
     RedisModule_ThreadSafeContextUnlock(ctx);
     RedisModule_ReplyWithCallReply(ctx, rep);
     RedisModule_FreeCallReply(rep);
@@ -159,17 +179,18 @@ static void *KeySpace_PostNotificationsAsyncSetInner(void *arg) {
     return NULL;
 }
 
-static int KeySpace_PostNotificationsAsyncSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int KeySpace_PostNotificationsAsyncSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     if (argc != 1)
         return RedisModule_WrongArity(ctx);
 
     pthread_t tid;
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx,NULL,NULL,NULL,0);
+    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
 
-    if (pthread_create(&tid,NULL,KeySpace_PostNotificationsAsyncSetInner,bc) != 0) {
+    if (pthread_create(&tid, NULL, KeySpace_PostNotificationsAsyncSetInner, bc) != 0) {
         RedisModule_AbortBlock(bc);
-        return RedisModule_ReplyWithError(ctx,"-ERR Can't start thread");
+        return RedisModule_ReplyWithError(ctx, "-ERR Can't start thread");
     }
     pthread_detach(tid);
     return REDISMODULE_OK;
@@ -180,58 +201,64 @@ typedef struct KeySpace_EventPostNotificationCtx {
     RedisModuleString *new_key;
 } KeySpace_EventPostNotificationCtx;
 
-static void KeySpace_ServerEventPostNotificationFree(void *pd) {
+static void KeySpace_ServerEventPostNotificationFree(void *pd)
+{
     KeySpace_EventPostNotificationCtx *pn_ctx = pd;
     RedisModule_FreeString(NULL, pn_ctx->new_key);
     RedisModule_FreeString(NULL, pn_ctx->triggered_on);
     RedisModule_Free(pn_ctx);
 }
 
-static void KeySpace_ServerEventPostNotification(RedisModuleCtx *ctx, void *pd) {
+static void KeySpace_ServerEventPostNotification(RedisModuleCtx *ctx, void *pd)
+{
     REDISMODULE_NOT_USED(ctx);
     KeySpace_EventPostNotificationCtx *pn_ctx = pd;
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, "lpush", "!ss", pn_ctx->new_key, pn_ctx->triggered_on);
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, "lpush", "!ss", pn_ctx->new_key, pn_ctx->triggered_on);
     RedisModule_FreeCallReply(rep);
 }
 
-static void KeySpace_ServerEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data) {
+static void KeySpace_ServerEventCallback(RedisModuleCtx *ctx, RedisModuleEvent eid, uint64_t subevent, void *data)
+{
     REDISMODULE_NOT_USED(eid);
     REDISMODULE_NOT_USED(data);
     if (subevent > 3) {
         RedisModule_Log(ctx, "warning", "Got an unexpected subevent '%llu'", (unsigned long long)subevent);
         return;
     }
-    static const char* events[] = {
-            "before_deleted",
-            "before_expired",
-            "before_evicted",
-            "before_overwritten",
+    static const char *events[] = {
+        "before_deleted",
+        "before_expired",
+        "before_evicted",
+        "before_overwritten",
     };
 
-    const RedisModuleString *key_name = RedisModule_GetKeyNameFromModuleKey(((RedisModuleKeyInfo*)data)->key);
+    const RedisModuleString *key_name = RedisModule_GetKeyNameFromModuleKey(((RedisModuleKeyInfo *)data)->key);
     const char *key_str = RedisModule_StringPtrLen(key_name, NULL);
 
-    for (int i = 0 ; i < 4 ; ++i) {
+    for (int i = 0; i < 4; ++i) {
         const char *event = events[i];
-        if (strncmp(key_str, event , strlen(event)) == 0) {
+        if (strncmp(key_str, event, strlen(event)) == 0) {
             return; /* don't log any event on our tracking keys */
         }
     }
 
     KeySpace_EventPostNotificationCtx *pn_ctx = RedisModule_Alloc(sizeof(*pn_ctx));
-    pn_ctx->triggered_on = RedisModule_HoldString(NULL, (RedisModuleString*)key_name);
+    pn_ctx->triggered_on = RedisModule_HoldString(NULL, (RedisModuleString *)key_name);
     pn_ctx->new_key = RedisModule_CreateString(NULL, events[subevent], strlen(events[subevent]));
-    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_ServerEventPostNotification, pn_ctx, KeySpace_ServerEventPostNotificationFree);
-    if (res == REDISMODULE_ERR) KeySpace_ServerEventPostNotificationFree(pn_ctx);
+    int res = RedisModule_AddPostNotificationJob(ctx, KeySpace_ServerEventPostNotification, pn_ctx,
+                                                 KeySpace_ServerEventPostNotificationFree);
+    if (res == REDISMODULE_ERR)
+        KeySpace_ServerEventPostNotificationFree(pn_ctx);
 }
 
 /* This function must be present on each Redis module. It is used in order to
  * register the commands into the Redis server. */
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"postnotifications",1,REDISMODULE_APIVER_1) == REDISMODULE_ERR){
+    if (RedisModule_Init(ctx, "postnotifications", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
@@ -249,41 +276,48 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_ALLOW_NESTED_KEYSPACE_NOTIFICATIONS);
 
-    if(RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING, KeySpace_NotificationString) != REDISMODULE_OK){
+    if (RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING, KeySpace_NotificationString) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    if(RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING, KeySpace_LazyExpireInsidePostNotificationJob) != REDISMODULE_OK){
+    if (RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING,
+                                              KeySpace_LazyExpireInsidePostNotificationJob) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    if(RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING, KeySpace_NestedNotification) != REDISMODULE_OK){
+    if (RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_STRING, KeySpace_NestedNotification) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    if(RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_EXPIRED, KeySpace_NotificationExpired) != REDISMODULE_OK){
+    if (RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_EXPIRED, KeySpace_NotificationExpired) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
-    if(RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_EVICTED, KeySpace_NotificationEvicted) != REDISMODULE_OK){
+    if (RedisModule_SubscribeToKeyspaceEvents(ctx, REDISMODULE_NOTIFY_EVICTED, KeySpace_NotificationEvicted) !=
+        REDISMODULE_OK) {
         return REDISMODULE_ERR;
     }
 
     if (with_key_events) {
-        if(RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Key, KeySpace_ServerEventCallback) != REDISMODULE_OK){
+        if (RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_Key, KeySpace_ServerEventCallback) !=
+            REDISMODULE_OK) {
             return REDISMODULE_ERR;
         }
     }
 
-    if (RedisModule_CreateCommand(ctx, "postnotification.async_set", KeySpace_PostNotificationsAsyncSet,
-                                      "write", 0, 0, 0) == REDISMODULE_ERR){
+    if (RedisModule_CreateCommand(ctx, "postnotification.async_set", KeySpace_PostNotificationsAsyncSet, "write", 0, 0,
+                                  0) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnUnload(RedisModuleCtx *ctx) {
+int RedisModule_OnUnload(RedisModuleCtx *ctx)
+{
     REDISMODULE_NOT_USED(ctx);
     return REDISMODULE_OK;
 }

@@ -28,9 +28,9 @@
  * fpconv_* will around these issues with a translation buffer if required.
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 #include "fpconv.h"
@@ -191,7 +191,7 @@ int fpconv_g_fmt(char *str, double num, int precision)
     b = buf;
     do {
         *str++ = (*b == locale_decimal_point ? '.' : *b);
-    } while(*b++);
+    } while (*b++);
 
     return len;
 }

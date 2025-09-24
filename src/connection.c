@@ -24,12 +24,13 @@
  * ==========================================================================
  */
 
-#include "server.h"
 #include "connection.h"
+#include "server.h"
 
 static ConnectionType *connTypes[CONN_TYPE_MAX];
 
-int connTypeRegister(ConnectionType *ct) {
+int connTypeRegister(ConnectionType *ct)
+{
     const char *typename = ct->get_type(NULL);
     ConnectionType *tmpct;
     int type;
@@ -58,7 +59,8 @@ int connTypeRegister(ConnectionType *ct) {
     return C_OK;
 }
 
-int connTypeInitialize(void) {
+int connTypeInitialize(void)
+{
     /* currently socket connection type is necessary  */
     serverAssert(RedisRegisterConnectionTypeSocket() == C_OK);
 
@@ -71,7 +73,8 @@ int connTypeInitialize(void) {
     return C_OK;
 }
 
-ConnectionType *connectionByType(const char *typename) {
+ConnectionType *connectionByType(const char *typename)
+{
     ConnectionType *ct;
 
     for (int type = 0; type < CONN_TYPE_MAX; type++) {
@@ -89,7 +92,8 @@ ConnectionType *connectionByType(const char *typename) {
 }
 
 /* Cache TCP connection type, query it by string once */
-ConnectionType *connectionTypeTcp(void) {
+ConnectionType *connectionTypeTcp(void)
+{
     static ConnectionType *ct_tcp = NULL;
 
     if (ct_tcp != NULL)
@@ -102,7 +106,8 @@ ConnectionType *connectionTypeTcp(void) {
 }
 
 /* Cache TLS connection type, query it by string once */
-ConnectionType *connectionTypeTls(void) {
+ConnectionType *connectionTypeTls(void)
+{
     static ConnectionType *ct_tls = NULL;
     static int cached = 0;
 
@@ -117,7 +122,8 @@ ConnectionType *connectionTypeTls(void) {
 }
 
 /* Cache Unix connection type, query it by string once */
-ConnectionType *connectionTypeUnix(void) {
+ConnectionType *connectionTypeUnix(void)
+{
     static ConnectionType *ct_unix = NULL;
 
     if (ct_unix != NULL)
@@ -127,7 +133,8 @@ ConnectionType *connectionTypeUnix(void) {
     return ct_unix;
 }
 
-int connectionIndexByType(const char *typename) {
+int connectionIndexByType(const char *typename)
+{
     ConnectionType *ct;
 
     for (int type = 0; type < CONN_TYPE_MAX; type++) {
@@ -142,7 +149,8 @@ int connectionIndexByType(const char *typename) {
     return -1;
 }
 
-void connTypeCleanupAll(void) {
+void connTypeCleanupAll(void)
+{
     ConnectionType *ct;
     int type;
 
@@ -157,7 +165,8 @@ void connTypeCleanupAll(void) {
 }
 
 /* walk all the connection types until has pending data */
-int connTypeHasPendingData(struct aeEventLoop *el) {
+int connTypeHasPendingData(struct aeEventLoop *el)
+{
     ConnectionType *ct;
     int type;
     int ret = 0;
@@ -173,7 +182,8 @@ int connTypeHasPendingData(struct aeEventLoop *el) {
 }
 
 /* walk all the connection types and process pending data for each connection type */
-int connTypeProcessPendingData(struct aeEventLoop *el) {
+int connTypeProcessPendingData(struct aeEventLoop *el)
+{
     ConnectionType *ct;
     int type;
     int ret = 0;
@@ -188,7 +198,8 @@ int connTypeProcessPendingData(struct aeEventLoop *el) {
     return ret;
 }
 
-sds getListensInfoString(sds info) {
+sds getListensInfoString(sds info)
+{
     for (int j = 0; j < CONN_TYPE_MAX; j++) {
         connListener *listener = &server.listeners[j];
         if (listener->ct == NULL)

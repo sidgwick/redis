@@ -3,26 +3,23 @@
 
 /* Page size.  LG_PAGE is determined by the configure script. */
 #ifdef PAGE_MASK
-#  undef PAGE_MASK
+#    undef PAGE_MASK
 #endif
-#define PAGE		((size_t)(1U << LG_PAGE))
-#define PAGE_MASK	((size_t)(PAGE - 1))
+#define PAGE ((size_t)(1U << LG_PAGE))
+#define PAGE_MASK ((size_t)(PAGE - 1))
 /* Return the page base address for the page containing address a. */
-#define PAGE_ADDR2BASE(a)						\
-	((void *)((uintptr_t)(a) & ~PAGE_MASK))
+#define PAGE_ADDR2BASE(a) ((void *)((uintptr_t)(a) & ~PAGE_MASK))
 /* Return the smallest pagesize multiple that is >= s. */
-#define PAGE_CEILING(s)							\
-	(((s) + PAGE_MASK) & ~PAGE_MASK)
+#define PAGE_CEILING(s) (((s) + PAGE_MASK) & ~PAGE_MASK)
 /* Return the largest pagesize multiple that is <=s. */
-#define PAGE_FLOOR(s) 							\
-	((s) & ~PAGE_MASK)
+#define PAGE_FLOOR(s) ((s) & ~PAGE_MASK)
 
 /* Huge page size.  LG_HUGEPAGE is determined by the configure script. */
-#define HUGEPAGE	((size_t)(1U << LG_HUGEPAGE))
-#define HUGEPAGE_MASK	((size_t)(HUGEPAGE - 1))
+#define HUGEPAGE ((size_t)(1U << LG_HUGEPAGE))
+#define HUGEPAGE_MASK ((size_t)(HUGEPAGE - 1))
 
 #if LG_HUGEPAGE != 0
-#  define HUGEPAGE_PAGES (HUGEPAGE / PAGE)
+#    define HUGEPAGE_PAGES (HUGEPAGE / PAGE)
 #else
 /*
  * It's convenient to define arrays (or bitmaps) of HUGEPAGE_PAGES lengths.  If
@@ -31,19 +28,17 @@
  * that this value is at least 1.  (We won't ever run in this degraded state;
  * hpa_supported() returns false in this case.
  */
-#  define HUGEPAGE_PAGES 1
+#    define HUGEPAGE_PAGES 1
 #endif
 
 /* Return the huge page base address for the huge page containing address a. */
-#define HUGEPAGE_ADDR2BASE(a)						\
-	((void *)((uintptr_t)(a) & ~HUGEPAGE_MASK))
+#define HUGEPAGE_ADDR2BASE(a) ((void *)((uintptr_t)(a) & ~HUGEPAGE_MASK))
 /* Return the smallest pagesize multiple that is >= s. */
-#define HUGEPAGE_CEILING(s)						\
-	(((s) + HUGEPAGE_MASK) & ~HUGEPAGE_MASK)
+#define HUGEPAGE_CEILING(s) (((s) + HUGEPAGE_MASK) & ~HUGEPAGE_MASK)
 
 /* PAGES_CAN_PURGE_LAZY is defined if lazy purging is supported. */
 #if defined(_WIN32) || defined(JEMALLOC_PURGE_MADVISE_FREE)
-#  define PAGES_CAN_PURGE_LAZY
+#    define PAGES_CAN_PURGE_LAZY
 #endif
 /*
  * PAGES_CAN_PURGE_FORCED is defined if forced purging is supported.
@@ -54,46 +49,47 @@
  * next step after purging on Windows anyway, there's no point in adding such
  * complexity.
  */
-#if !defined(_WIN32) && ((defined(JEMALLOC_PURGE_MADVISE_DONTNEED) && \
-    defined(JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS)) || \
-    defined(JEMALLOC_MAPS_COALESCE))
-#  define PAGES_CAN_PURGE_FORCED
+#if !defined(_WIN32)                                                           \
+  && ((defined(JEMALLOC_PURGE_MADVISE_DONTNEED)                                \
+        && defined(JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS))                     \
+    || defined(JEMALLOC_MAPS_COALESCE))
+#    define PAGES_CAN_PURGE_FORCED
 #endif
 
 static const bool pages_can_purge_lazy =
 #ifdef PAGES_CAN_PURGE_LAZY
-    true
+  true
 #else
-    false
+  false
 #endif
-    ;
+  ;
 static const bool pages_can_purge_forced =
 #ifdef PAGES_CAN_PURGE_FORCED
-    true
+  true
 #else
-    false
+  false
 #endif
-    ;
+  ;
 
 #if defined(JEMALLOC_HAVE_MADVISE_HUGE) || defined(JEMALLOC_HAVE_MEMCNTL)
-#  define PAGES_CAN_HUGIFY
+#    define PAGES_CAN_HUGIFY
 #endif
 
 static const bool pages_can_hugify =
 #ifdef PAGES_CAN_HUGIFY
-    true
+  true
 #else
-    false
+  false
 #endif
-    ;
+  ;
 
 typedef enum {
-	thp_mode_default       = 0, /* Do not change hugepage settings. */
-	thp_mode_always        = 1, /* Always set MADV_HUGEPAGE. */
-	thp_mode_never         = 2, /* Always set MADV_NOHUGEPAGE. */
+    thp_mode_default = 0, /* Do not change hugepage settings. */
+    thp_mode_always = 1, /* Always set MADV_HUGEPAGE. */
+    thp_mode_never = 2, /* Always set MADV_NOHUGEPAGE. */
 
-	thp_mode_names_limit   = 3, /* Used for option processing. */
-	thp_mode_not_supported = 3  /* No THP support detected. */
+    thp_mode_names_limit = 3, /* Used for option processing. */
+    thp_mode_not_supported = 3 /* No THP support detected. */
 } thp_mode_t;
 
 #define THP_MODE_DEFAULT thp_mode_default
@@ -112,7 +108,7 @@ bool pages_nohuge(void *addr, size_t size);
 bool pages_dontdump(void *addr, size_t size);
 bool pages_dodump(void *addr, size_t size);
 bool pages_boot(void);
-void pages_set_thp_state (void *ptr, size_t size);
+void pages_set_thp_state(void *ptr, size_t size);
 void pages_mark_guards(void *head, void *tail);
 void pages_unmark_guards(void *head, void *tail);
 

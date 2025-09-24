@@ -127,30 +127,30 @@
 #ifndef __MSTR_H
 #define __MSTR_H
 
-#include <sys/types.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 /* Selective copy of ifndef from server.h instead of including it */
 #ifndef static_assert
-#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1:-1]
+#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1 : -1]
 #endif
 
-#define MSTR_TYPE_5         0
-#define MSTR_TYPE_8         1
-#define MSTR_TYPE_16        2
-#define MSTR_TYPE_64        3
-#define MSTR_TYPE_MASK      3
-#define MSTR_TYPE_BITS      2
+#define MSTR_TYPE_5 0
+#define MSTR_TYPE_8 1
+#define MSTR_TYPE_16 2
+#define MSTR_TYPE_64 3
+#define MSTR_TYPE_MASK 3
+#define MSTR_TYPE_BITS 2
 
-#define MSTR_META_MASK      4
+#define MSTR_META_MASK 4
 
-#define MSTR_HDR(T,s) ((struct mstrhdr##T *)((s)-(sizeof(struct mstrhdr##T))))
-#define MSTR_HDR_VAR(T,s) struct mstrhdr##T *sh = (void*)((s)-(sizeof(struct mstrhdr##T)));
+#define MSTR_HDR(T, s) ((struct mstrhdr##T *)((s) - (sizeof(struct mstrhdr##T))))
+#define MSTR_HDR_VAR(T, s) struct mstrhdr##T *sh = (void *)((s) - (sizeof(struct mstrhdr##T)));
 
-#define MSTR_META_BITS  1  /* is metadata attached? */
+#define MSTR_META_BITS 1 /* is metadata attached? */
 #define MSTR_TYPE_5_LEN(f) ((f) >> (MSTR_TYPE_BITS + MSTR_META_BITS))
-#define CREATE_MSTR_INFO(len, ismeta, type) ( (((len<<MSTR_META_BITS) + ismeta) << (MSTR_TYPE_BITS)) | type )
+#define CREATE_MSTR_INFO(len, ismeta, type) ((((len << MSTR_META_BITS) + ismeta) << (MSTR_TYPE_BITS)) | type)
 
 /* mimic plain c-string */
 typedef char *mstr;
@@ -159,31 +159,31 @@ typedef char *mstr;
  * */
 typedef uint16_t mstrFlags;
 
-struct __attribute__ ((__packed__)) mstrhdr5 {
+struct __attribute__((__packed__)) mstrhdr5 {
     unsigned char info; /* 2 lsb of type, 1 metadata, and 5 msb of string length */
     char buf[];
 };
-struct __attribute__ ((__packed__)) mstrhdr8 {
-    uint8_t unused;  /* To achieve odd size header (See comment above) */
+struct __attribute__((__packed__)) mstrhdr8 {
+    uint8_t unused; /* To achieve odd size header (See comment above) */
     uint8_t len;
     unsigned char info; /* 2 lsb of type, 6 unused bits */
     char buf[];
 };
-struct __attribute__ ((__packed__)) mstrhdr16 {
+struct __attribute__((__packed__)) mstrhdr16 {
     uint16_t len;
     unsigned char info; /* 2 lsb of type, 6 unused bits */
     char buf[];
 };
-struct __attribute__ ((__packed__)) mstrhdr64 {
+struct __attribute__((__packed__)) mstrhdr64 {
     uint64_t len;
     unsigned char info; /* 2 lsb of type, 6 unused bits */
     char buf[];
 };
 
-#define NUM_MSTR_FLAGS (sizeof(mstrFlags)*8)
+#define NUM_MSTR_FLAGS (sizeof(mstrFlags) * 8)
 
 /* mstrKind is used to define a kind (a group) of mstring with its own metadata layout */
- typedef struct mstrKind {
+typedef struct mstrKind {
     const char *name;
     int metaSize[NUM_MSTR_FLAGS];
 } mstrKind;
@@ -205,20 +205,26 @@ void *mstrMetaRef(mstr s, struct mstrKind *kind, int flagIdx);
 size_t mstrlen(const mstr s);
 
 /* return non-zero if metadata is attached to mstring */
-static inline int mstrIsMetaAttached(mstr s) { return s[-1] & MSTR_META_MASK; }
+static inline int mstrIsMetaAttached(mstr s)
+{
+    return s[-1] & MSTR_META_MASK;
+}
 
 /* return whether if a specific flag-index is set */
-static inline int mstrGetFlag(mstr s, int flagIdx) { return *mstrFlagsRef(s) & (1 << flagIdx); }
+static inline int mstrGetFlag(mstr s, int flagIdx)
+{
+    return *mstrFlagsRef(s) & (1 << flagIdx);
+}
 
 /* DEBUG */
 void mstrPrint(mstr s, struct mstrKind *kind, int verbose);
 
 /* See comment above about MSTR-ALIGNMENT(2) */
-static_assert(sizeof(struct mstrhdr5 ) % 2 == 1, "must be odd");
-static_assert(sizeof(struct mstrhdr8 ) % 2 == 1, "must be odd");
-static_assert(sizeof(struct mstrhdr16 ) % 2 == 1, "must be odd");
-static_assert(sizeof(struct mstrhdr64 ) % 2 == 1, "must be odd");
-static_assert(sizeof(mstrFlags ) % 2 == 0, "must be even to keep mstr pointer odd");
+static_assert(sizeof(struct mstrhdr5) % 2 == 1, "must be odd");
+static_assert(sizeof(struct mstrhdr8) % 2 == 1, "must be odd");
+static_assert(sizeof(struct mstrhdr16) % 2 == 1, "must be odd");
+static_assert(sizeof(struct mstrhdr64) % 2 == 1, "must be odd");
+static_assert(sizeof(mstrFlags) % 2 == 0, "must be even to keep mstr pointer odd");
 
 #ifdef REDIS_TEST
 int mstrTest(int argc, char *argv[], int flags);

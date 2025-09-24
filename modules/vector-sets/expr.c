@@ -24,10 +24,10 @@
 #include <math.h>
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define EXPR_TOKEN_EOF 0
@@ -38,46 +38,46 @@
 #define EXPR_TOKEN_OP 5
 #define EXPR_TOKEN_NULL 6
 
-#define EXPR_OP_OPAREN 0  /* ( */
-#define EXPR_OP_CPAREN 1  /* ) */
-#define EXPR_OP_NOT    2  /* ! */
-#define EXPR_OP_POW    3  /* ** */
-#define EXPR_OP_MULT   4  /* * */
-#define EXPR_OP_DIV    5  /* / */
-#define EXPR_OP_MOD    6  /* % */
-#define EXPR_OP_SUM    7  /* + */
-#define EXPR_OP_DIFF   8  /* - */
-#define EXPR_OP_GT     9  /* > */
-#define EXPR_OP_GTE    10 /* >= */
-#define EXPR_OP_LT     11 /* < */
-#define EXPR_OP_LTE    12 /* <= */
-#define EXPR_OP_EQ     13 /* == */
-#define EXPR_OP_NEQ    14 /* != */
-#define EXPR_OP_IN     15 /* in */
-#define EXPR_OP_AND    16 /* and */
-#define EXPR_OP_OR     17 /* or */
+#define EXPR_OP_OPAREN 0 /* ( */
+#define EXPR_OP_CPAREN 1 /* ) */
+#define EXPR_OP_NOT 2    /* ! */
+#define EXPR_OP_POW 3    /* ** */
+#define EXPR_OP_MULT 4   /* * */
+#define EXPR_OP_DIV 5    /* / */
+#define EXPR_OP_MOD 6    /* % */
+#define EXPR_OP_SUM 7    /* + */
+#define EXPR_OP_DIFF 8   /* - */
+#define EXPR_OP_GT 9     /* > */
+#define EXPR_OP_GTE 10   /* >= */
+#define EXPR_OP_LT 11    /* < */
+#define EXPR_OP_LTE 12   /* <= */
+#define EXPR_OP_EQ 13    /* == */
+#define EXPR_OP_NEQ 14   /* != */
+#define EXPR_OP_IN 15    /* in */
+#define EXPR_OP_AND 16   /* and */
+#define EXPR_OP_OR 17    /* or */
 
 /* This structure represents a token in our expression. It's either
  * literals like 4, "foo", or operators like "+", "-", "and", or
  * json selectors, that start with a dot: ".age", ".properties.somearray[1]" */
 typedef struct exprtoken {
-    int refcount;           // Reference counting for memory reclaiming.
-    int token_type;         // Token type of the just parsed token.
-    int offset;             // Chars offset in expression.
+    int refcount;   // Reference counting for memory reclaiming.
+    int token_type; // Token type of the just parsed token.
+    int offset;     // Chars offset in expression.
     union {
-        double num;         // Value for EXPR_TOKEN_NUM.
+        double num; // Value for EXPR_TOKEN_NUM.
         struct {
-            char *start;    // String pointer for EXPR_TOKEN_STR / SELECTOR.
-            size_t len;     // String len for EXPR_TOKEN_STR / SELECTOR.
-            char *heapstr;  // True if we have a private allocation for this
-                            // string. When possible, it just references to the
-                            // string expression we compiled, exprstate->expr.
+            char *start;   // String pointer for EXPR_TOKEN_STR / SELECTOR.
+            size_t len;    // String len for EXPR_TOKEN_STR / SELECTOR.
+            char *heapstr; // True if we have a private allocation for this
+                           // string. When possible, it just references to the
+                           // string expression we compiled, exprstate->expr.
         } str;
-        int opcode;         // Opcode ID for EXPR_TOKEN_OP.
+        int opcode; // Opcode ID for EXPR_TOKEN_OP.
         struct {
             struct exprtoken **ele;
             size_t len;
-        } tuple;            // Tuples are like [1, 2, 3] for "in" operator.
+        } tuple; // Tuples are like [1, 2, 3] for "in" operator.
     };
 } exprtoken;
 
@@ -90,16 +90,16 @@ typedef struct exprstack {
 } exprstack;
 
 typedef struct exprstate {
-    char *expr;             /* Expression string to compile. Note that
+    char *expr; /* Expression string to compile. Note that
                              * expression token strings point directly to this
                              * string. */
-    char *p;                // Current position inside 'expr', while parsing.
+    char *p;    // Current position inside 'expr', while parsing.
 
     // Virtual machine state.
     exprstack values_stack;
-    exprstack ops_stack;    // Operator stack used during compilation.
-    exprstack tokens;       // Expression processed into a sequence of tokens.
-    exprstack program;      // Expression compiled into opcodes and values.
+    exprstack ops_stack; // Operator stack used during compilation.
+    exprstack tokens;    // Expression processed into a sequence of tokens.
+    exprstack program;   // Expression compiled into opcodes and values.
 } exprstate;
 
 /* Valid operators. */
@@ -110,28 +110,17 @@ struct {
     int precedence;
     int arity;
 } ExprOptable[] = {
-    {"(",   1,  EXPR_OP_OPAREN,  7, 0},
-    {")",   1,  EXPR_OP_CPAREN,  7, 0},
-    {"!",   1,  EXPR_OP_NOT,     6, 1},
-    {"not", 3,  EXPR_OP_NOT,     6, 1},
-    {"**",  2,  EXPR_OP_POW,     5, 2},
-    {"*",   1,  EXPR_OP_MULT,    4, 2},
-    {"/",   1,  EXPR_OP_DIV,     4, 2},
-    {"%",   1,  EXPR_OP_MOD,     4, 2},
-    {"+",   1,  EXPR_OP_SUM,     3, 2},
-    {"-",   1,  EXPR_OP_DIFF,    3, 2},
-    {">",   1,  EXPR_OP_GT,      2, 2},
-    {">=",  2,  EXPR_OP_GTE,     2, 2},
-    {"<",   1,  EXPR_OP_LT,      2, 2},
-    {"<=",  2,  EXPR_OP_LTE,     2, 2},
-    {"==",  2,  EXPR_OP_EQ,      2, 2},
-    {"!=",  2,  EXPR_OP_NEQ,     2, 2},
-    {"in",  2,  EXPR_OP_IN,      2, 2},
-    {"and", 3,  EXPR_OP_AND,     1, 2},
-    {"&&",  2,  EXPR_OP_AND,     1, 2},
-    {"or",  2,  EXPR_OP_OR,      0, 2},
-    {"||",  2,  EXPR_OP_OR,      0, 2},
-    {NULL,  0,  0,               0, 0}   // Terminator.
+    {"(", 1, EXPR_OP_OPAREN, 7, 0}, {")", 1, EXPR_OP_CPAREN, 7, 0},
+    {"!", 1, EXPR_OP_NOT, 6, 1},    {"not", 3, EXPR_OP_NOT, 6, 1},
+    {"**", 2, EXPR_OP_POW, 5, 2},   {"*", 1, EXPR_OP_MULT, 4, 2},
+    {"/", 1, EXPR_OP_DIV, 4, 2},    {"%", 1, EXPR_OP_MOD, 4, 2},
+    {"+", 1, EXPR_OP_SUM, 3, 2},    {"-", 1, EXPR_OP_DIFF, 3, 2},
+    {">", 1, EXPR_OP_GT, 2, 2},     {">=", 2, EXPR_OP_GTE, 2, 2},
+    {"<", 1, EXPR_OP_LT, 2, 2},     {"<=", 2, EXPR_OP_LTE, 2, 2},
+    {"==", 2, EXPR_OP_EQ, 2, 2},    {"!=", 2, EXPR_OP_NEQ, 2, 2},
+    {"in", 2, EXPR_OP_IN, 2, 2},    {"and", 3, EXPR_OP_AND, 1, 2},
+    {"&&", 2, EXPR_OP_AND, 1, 2},   {"or", 2, EXPR_OP_OR, 0, 2},
+    {"||", 2, EXPR_OP_OR, 0, 2},    {NULL, 0, 0, 0, 0} // Terminator.
 };
 
 #define EXPR_OP_SPECIALCHARS "+-*%/!()<>=|&"
@@ -141,9 +130,10 @@ struct {
 
 /* Return an heap allocated token of the specified type, setting the
  * reference count to 1. */
-exprtoken *exprNewToken(int type) {
+exprtoken *exprNewToken(int type)
+{
     exprtoken *t = RedisModule_Alloc(sizeof(exprtoken));
-    memset(t,0,sizeof(*t));
+    memset(t, 0, sizeof(*t));
     t->token_type = type;
     t->refcount = 1;
     return t;
@@ -152,25 +142,31 @@ exprtoken *exprNewToken(int type) {
 /* Generic free token function, can be used to free stack allocated
  * objects (in this case the pointer itself will not be freed) or
  * heap allocated objects. See the wrappers below. */
-void exprTokenRelease(exprtoken *t) {
-    if (t == NULL) return;
+void exprTokenRelease(exprtoken *t)
+{
+    if (t == NULL)
+        return;
 
     RedisModule_Assert(t->refcount > 0); // Catch double free & more.
     t->refcount--;
-    if (t->refcount > 0) return;
+    if (t->refcount > 0)
+        return;
 
     // We reached refcount 0: free the object.
     if (t->token_type == EXPR_TOKEN_STR) {
-        if (t->str.heapstr != NULL) RedisModule_Free(t->str.heapstr);
+        if (t->str.heapstr != NULL)
+            RedisModule_Free(t->str.heapstr);
     } else if (t->token_type == EXPR_TOKEN_TUPLE) {
         for (size_t j = 0; j < t->tuple.len; j++)
             exprTokenRelease(t->tuple.ele[j]);
-        if (t->tuple.ele) RedisModule_Free(t->tuple.ele);
+        if (t->tuple.ele)
+            RedisModule_Free(t->tuple.ele);
     }
     RedisModule_Free(t);
 }
 
-void exprTokenRetain(exprtoken *t) {
+void exprTokenRetain(exprtoken *t)
+{
     t->refcount++;
 }
 
@@ -182,20 +178,21 @@ void exprTokenRetain(exprtoken *t) {
 #define EXPR_STACK_INITIAL_SIZE 16
 
 /* Initialize a new expression stack. */
-void exprStackInit(exprstack *stack) {
-    stack->items = RedisModule_Alloc(sizeof(exprtoken*) * EXPR_STACK_INITIAL_SIZE);
+void exprStackInit(exprstack *stack)
+{
+    stack->items = RedisModule_Alloc(sizeof(exprtoken *) * EXPR_STACK_INITIAL_SIZE);
     stack->numitems = 0;
     stack->allocsize = EXPR_STACK_INITIAL_SIZE;
 }
 
 /* Push a token pointer onto the stack. Does not increment the refcount
  * of the token: it is up to the caller doing this. */
-void exprStackPush(exprstack *stack, exprtoken *token) {
+void exprStackPush(exprstack *stack, exprtoken *token)
+{
     /* Check if we need to grow the stack. */
     if (stack->numitems == stack->allocsize) {
         size_t newsize = stack->allocsize * 2;
-        exprtoken **newitems =
-            RedisModule_Realloc(stack->items, sizeof(exprtoken*) * newsize);
+        exprtoken **newitems = RedisModule_Realloc(stack->items, sizeof(exprtoken *) * newsize);
         stack->items = newitems;
         stack->allocsize = newsize;
     }
@@ -206,22 +203,27 @@ void exprStackPush(exprstack *stack, exprtoken *token) {
 /* Pop a token pointer from the stack. Return NULL if the stack is
  * empty. Does NOT recrement the refcount of the token, it's up to the
  * caller to do so, as the new owner of the reference. */
-exprtoken *exprStackPop(exprstack *stack) {
-    if (stack->numitems == 0) return NULL;
+exprtoken *exprStackPop(exprstack *stack)
+{
+    if (stack->numitems == 0)
+        return NULL;
     stack->numitems--;
     return stack->items[stack->numitems];
 }
 
 /* Just return the last element pushed, without consuming it nor altering
  * the reference count. */
-exprtoken *exprStackPeek(exprstack *stack) {
-    if (stack->numitems == 0) return NULL;
-    return stack->items[stack->numitems-1];
+exprtoken *exprStackPeek(exprstack *stack)
+{
+    if (stack->numitems == 0)
+        return NULL;
+    return stack->items[stack->numitems - 1];
 }
 
 /* Free the stack structure state, including the items it contains, that are
  * assumed to be heap allocated. The passed pointer itself is not freed. */
-void exprStackFree(exprstack *stack) {
+void exprStackFree(exprstack *stack)
+{
     for (int j = 0; j < stack->numitems; j++)
         exprTokenRelease(stack->items[j]);
     RedisModule_Free(stack->items);
@@ -229,7 +231,8 @@ void exprStackFree(exprstack *stack) {
 
 /* Just reset the stack removing all the items, but leaving it in a state
  * that makes it still usable for new elements. */
-void exprStackReset(exprstack *stack) {
+void exprStackReset(exprstack *stack)
+{
     for (int j = 0; j < stack->numitems; j++)
         exprTokenRelease(stack->items[j]);
     stack->numitems = 0;
@@ -237,21 +240,21 @@ void exprStackReset(exprstack *stack) {
 
 /* =========================== Expression compilation ======================= */
 
-void exprConsumeSpaces(exprstate *es) {
-    while(es->p[0] && isspace(es->p[0])) es->p++;
+void exprConsumeSpaces(exprstate *es)
+{
+    while (es->p[0] && isspace(es->p[0]))
+        es->p++;
 }
 
 /* Parse an operator or a literal (just "null" currently).
  * When parsing operators, the function will try to match the longest match
  * in the operators table. */
-exprtoken *exprParseOperatorOrLiteral(exprstate *es) {
+exprtoken *exprParseOperatorOrLiteral(exprstate *es)
+{
     exprtoken *t = exprNewToken(EXPR_TOKEN_OP);
     char *start = es->p;
 
-    while(es->p[0] &&
-          (isalpha(es->p[0]) ||
-           strchr(EXPR_OP_SPECIALCHARS,es->p[0]) != NULL))
-    {
+    while (es->p[0] && (isalpha(es->p[0]) || strchr(EXPR_OP_SPECIALCHARS, es->p[0]) != NULL)) {
         es->p++;
     }
 
@@ -260,16 +263,16 @@ exprtoken *exprParseOperatorOrLiteral(exprstate *es) {
     int j;
 
     // Check if it's a literal.
-    if (matchlen == 4 && !memcmp("null",start,4)) {
+    if (matchlen == 4 && !memcmp("null", start, 4)) {
         t->token_type = EXPR_TOKEN_NULL;
         return t;
     }
 
     // Find the longest matching operator.
     for (j = 0; ExprOptable[j].opname != NULL; j++) {
-        if (ExprOptable[j].oplen > matchlen) continue;
-        if (memcmp(ExprOptable[j].opname, start, ExprOptable[j].oplen) != 0)
-        {
+        if (ExprOptable[j].oplen > matchlen)
+            continue;
+        if (memcmp(ExprOptable[j].opname, start, ExprOptable[j].oplen) != 0) {
             continue;
         }
         if (ExprOptable[j].oplen > bestlen) {
@@ -287,34 +290,35 @@ exprtoken *exprParseOperatorOrLiteral(exprstate *es) {
 }
 
 // Valid selector charset.
-static int is_selector_char(int c) {
-    return (isalpha(c) ||
-            isdigit(c) ||
-            strchr(EXPR_SELECTOR_SPECIALCHARS,c) != NULL);
+static int is_selector_char(int c)
+{
+    return (isalpha(c) || isdigit(c) || strchr(EXPR_SELECTOR_SPECIALCHARS, c) != NULL);
 }
 
 /* Parse selectors, they start with a dot and can have alphanumerical
  * or few special chars. */
-exprtoken *exprParseSelector(exprstate *es) {
+exprtoken *exprParseSelector(exprstate *es)
+{
     exprtoken *t = exprNewToken(EXPR_TOKEN_SELECTOR);
     es->p++; // Skip dot.
     char *start = es->p;
 
-    while(es->p[0] && is_selector_char(es->p[0])) es->p++;
+    while (es->p[0] && is_selector_char(es->p[0]))
+        es->p++;
     int matchlen = es->p - start;
     t->str.start = start;
     t->str.len = matchlen;
     return t;
 }
 
-exprtoken *exprParseNumber(exprstate *es) {
+exprtoken *exprParseNumber(exprstate *es)
+{
     exprtoken *t = exprNewToken(EXPR_TOKEN_NUM);
     char num[256];
     int idx = 0;
-    while(isdigit(es->p[0]) || es->p[0] == '.' || es->p[0] == 'e' ||
-          es->p[0] == 'E' || (idx == 0 && es->p[0] == '-'))
-    {
-        if (idx >= (int)sizeof(num)-1) {
+    while (isdigit(es->p[0]) || es->p[0] == '.' || es->p[0] == 'e' || es->p[0] == 'E' ||
+           (idx == 0 && es->p[0] == '-')) {
+        if (idx >= (int)sizeof(num) - 1) {
             exprTokenRelease(t);
             return NULL;
         }
@@ -332,14 +336,15 @@ exprtoken *exprParseNumber(exprstate *es) {
     return t;
 }
 
-exprtoken *exprParseString(exprstate *es) {
-    char quote = es->p[0];  /* Store the quote type (' or "). */
-    es->p++;                /* Skip opening quote. */
+exprtoken *exprParseString(exprstate *es)
+{
+    char quote = es->p[0]; /* Store the quote type (' or "). */
+    es->p++;               /* Skip opening quote. */
 
     exprtoken *t = exprNewToken(EXPR_TOKEN_STR);
     t->str.start = es->p;
 
-    while(es->p[0] != '\0') {
+    while (es->p[0] != '\0') {
         if (es->p[0] == '\\' && es->p[1] != '\0') {
             es->p += 2; // Skip escaped char.
             continue;
@@ -359,14 +364,15 @@ exprtoken *exprParseString(exprstate *es) {
 /* Parse a tuple of the form [1, "foo", 42]. No nested tuples are
  * supported. This type is useful mostly to be used with the "IN"
  * operator. */
-exprtoken *exprParseTuple(exprstate *es) {
+exprtoken *exprParseTuple(exprstate *es)
+{
     exprtoken *t = exprNewToken(EXPR_TOKEN_TUPLE);
     t->tuple.ele = NULL;
     t->tuple.len = 0;
     es->p++; /* Skip opening '['. */
 
     size_t allocated = 0;
-    while(1) {
+    while (1) {
         exprConsumeSpaces(es);
 
         /* Check for empty tuple or end. */
@@ -378,8 +384,7 @@ exprtoken *exprParseTuple(exprstate *es) {
         /* Grow tuple array if needed. */
         if (t->tuple.len == allocated) {
             size_t newsize = allocated == 0 ? 4 : allocated * 2;
-            exprtoken **newele = RedisModule_Realloc(t->tuple.ele,
-                sizeof(exprtoken*) * newsize);
+            exprtoken **newele = RedisModule_Realloc(t->tuple.ele, sizeof(exprtoken *) * newsize);
             t->tuple.ele = newele;
             allocated = newsize;
         }
@@ -421,11 +426,14 @@ exprtoken *exprParseTuple(exprstate *es) {
 }
 
 /* Deallocate the object returned by exprCompile(). */
-void exprFree(exprstate *es) {
-    if (es == NULL) return;
+void exprFree(exprstate *es)
+{
+    if (es == NULL)
+        return;
 
     /* Free the original expression string. */
-    if (es->expr) RedisModule_Free(es->expr);
+    if (es->expr)
+        RedisModule_Free(es->expr);
 
     /* Free all stacks. */
     exprStackFree(&es->values_stack);
@@ -439,9 +447,10 @@ void exprFree(exprstate *es) {
 
 /* Split the provided expression into a stack of tokens. Returns
  * 0 on success, 1 on error. */
-int exprTokenize(exprstate *es, int *errpos) {
+int exprTokenize(exprstate *es, int *errpos)
+{
     /* Main parsing loop. */
-    while(1) {
+    while (1) {
         exprConsumeSpaces(es);
 
         /* Set a flag to see if we can consider the - part of the
@@ -453,9 +462,7 @@ int exprTokenize(exprstate *es, int *errpos) {
             /* If we are at the start of an expression, the minus is
              * considered a number. */
             minus_is_number = 1;
-        } else if (last->token_type == EXPR_TOKEN_OP &&
-                   last->opcode != EXPR_OP_CPAREN)
-        {
+        } else if (last->token_type == EXPR_TOKEN_OP && last->opcode != EXPR_OP_CPAREN) {
             /* Also, if the previous token was an operator, the minus
              * is considered a number, unless the previous operator is
              * a closing parens. In such case it's like (...) -5, or alike
@@ -467,9 +474,7 @@ int exprTokenize(exprstate *es, int *errpos) {
         exprtoken *current = NULL;
         if (*es->p == '\0') {
             current = exprNewToken(EXPR_TOKEN_EOF);
-        } else if (isdigit(*es->p) ||
-                  (minus_is_number && *es->p == '-' && isdigit(es->p[1])))
-        {
+        } else if (isdigit(*es->p) || (minus_is_number && *es->p == '-' && isdigit(es->p[1]))) {
             current = exprParseNumber(es);
         } else if (*es->p == '"' || *es->p == '\'') {
             current = exprParseString(es);
@@ -482,19 +487,22 @@ int exprTokenize(exprstate *es, int *errpos) {
         }
 
         if (current == NULL) {
-            if (errpos) *errpos = es->p - es->expr;
+            if (errpos)
+                *errpos = es->p - es->expr;
             return 1; // Syntax Error.
         }
 
         /* Push the current token to tokens stack. */
         exprStackPush(&es->tokens, current);
-        if (current->token_type == EXPR_TOKEN_EOF) break;
+        if (current->token_type == EXPR_TOKEN_EOF)
+            break;
     }
     return 0;
 }
 
 /* Helper function to get operator precedence from the operator table. */
-int exprGetOpPrecedence(int opcode) {
+int exprGetOpPrecedence(int opcode)
+{
     for (int i = 0; ExprOptable[i].opname != NULL; i++) {
         if (ExprOptable[i].opcode == opcode)
             return ExprOptable[i].precedence;
@@ -503,7 +511,8 @@ int exprGetOpPrecedence(int opcode) {
 }
 
 /* Helper function to get operator arity from the operator table. */
-int exprGetOpArity(int opcode) {
+int exprGetOpArity(int opcode)
+{
     for (int i = 0; ExprOptable[i].opname != NULL; i++) {
         if (ExprOptable[i].opcode == opcode)
             return ExprOptable[i].arity;
@@ -514,9 +523,10 @@ int exprGetOpArity(int opcode) {
 /* Process an operator during compilation. Returns 0 on success, 1 on error.
  * This function will retain a reference of the operator 'op' in case it
  * is pushed on the operators stack. */
-int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *errpos) {
+int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *errpos)
+{
     if (op->opcode == EXPR_OP_OPAREN) {
-	// This is just a marker for us. Do nothing.
+        // This is just a marker for us. Do nothing.
         exprStackPush(&es->ops_stack, op);
         exprTokenRetain(op);
         return 0;
@@ -527,7 +537,8 @@ int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *err
         while (1) {
             exprtoken *top_op = exprStackPop(&es->ops_stack);
             if (top_op == NULL) {
-                if (errpos) *errpos = op->offset;
+                if (errpos)
+                    *errpos = op->offset;
                 return 1;
             }
 
@@ -540,7 +551,8 @@ int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *err
             int arity = exprGetOpArity(top_op->opcode);
             if (*stack_items < arity) {
                 exprTokenRelease(top_op);
-                if (errpos) *errpos = top_op->offset;
+                if (errpos)
+                    *errpos = top_op->offset;
                 return 1;
             }
 
@@ -555,22 +567,26 @@ int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *err
     /* Process operators with higher or equal precedence. */
     while (1) {
         exprtoken *top_op = exprStackPeek(&es->ops_stack);
-        if (top_op == NULL || top_op->opcode == EXPR_OP_OPAREN) break;
+        if (top_op == NULL || top_op->opcode == EXPR_OP_OPAREN)
+            break;
 
         int top_prec = exprGetOpPrecedence(top_op->opcode);
-        if (top_prec < curr_prec) break;
+        if (top_prec < curr_prec)
+            break;
         /* Special case for **: only pop if precedence is strictly higher
          * so that the operator is right associative, that is:
          * 2 ** 3 ** 2 is evaluated as 2 ** (3 ** 2) == 512 instead
          * of (2 ** 3) ** 2 == 64. */
-        if (op->opcode == EXPR_OP_POW && top_prec <= curr_prec) break;
+        if (op->opcode == EXPR_OP_POW && top_prec <= curr_prec)
+            break;
 
         /* Pop and add to program. */
         top_op = exprStackPop(&es->ops_stack);
         int arity = exprGetOpArity(top_op->opcode);
         if (*stack_items < arity) {
             exprTokenRelease(top_op);
-            if (errpos) *errpos = top_op->offset;
+            if (errpos)
+                *errpos = top_op->offset;
             return 1;
         }
 
@@ -590,7 +606,8 @@ int exprProcessOperator(exprstate *es, exprtoken *op, int *stack_items, int *err
  * that can be used for execution of the program. On error, NULL
  * is returned, and optionally the position of the error into the
  * expression is returned by reference. */
-exprstate *exprCompile(char *expr, int *errpos) {
+exprstate *exprCompile(char *expr, int *errpos)
+{
     /* Initialize expression state. */
     exprstate *es = RedisModule_Alloc(sizeof(exprstate));
     es->expr = RedisModule_Strdup(expr);
@@ -609,7 +626,7 @@ exprstate *exprCompile(char *expr, int *errpos) {
     }
 
     /* Compile the expression into a sequence of operations. */
-    int stack_items = 0;  // Track # of items that would be on the stack
+    int stack_items = 0; // Track # of items that would be on the stack
                          // during execution. This way we can detect arity
                          // issues at compile time.
 
@@ -617,15 +634,13 @@ exprstate *exprCompile(char *expr, int *errpos) {
     for (int i = 0; i < es->tokens.numitems; i++) {
         exprtoken *token = es->tokens.items[i];
 
-        if (token->token_type == EXPR_TOKEN_EOF) break;
+        if (token->token_type == EXPR_TOKEN_EOF)
+            break;
 
         /* Handle values (numbers, strings, selectors, null). */
-        if (token->token_type == EXPR_TOKEN_NUM ||
-            token->token_type == EXPR_TOKEN_STR ||
-            token->token_type == EXPR_TOKEN_TUPLE ||
-            token->token_type == EXPR_TOKEN_SELECTOR ||
-            token->token_type == EXPR_TOKEN_NULL)
-        {
+        if (token->token_type == EXPR_TOKEN_NUM || token->token_type == EXPR_TOKEN_STR ||
+            token->token_type == EXPR_TOKEN_TUPLE || token->token_type == EXPR_TOKEN_SELECTOR ||
+            token->token_type == EXPR_TOKEN_NULL) {
             exprStackPush(&es->program, token);
             exprTokenRetain(token);
             stack_items++;
@@ -646,7 +661,8 @@ exprstate *exprCompile(char *expr, int *errpos) {
     while (es->ops_stack.numitems > 0) {
         exprtoken *op = exprStackPop(&es->ops_stack);
         if (op->opcode == EXPR_OP_OPAREN) {
-            if (errpos) *errpos = op->offset;
+            if (errpos)
+                *errpos = op->offset;
             exprTokenRelease(op);
             exprFree(es);
             return NULL;
@@ -654,7 +670,8 @@ exprstate *exprCompile(char *expr, int *errpos) {
 
         int arity = exprGetOpArity(op->opcode);
         if (stack_items < arity) {
-            if (errpos) *errpos = op->offset;
+            if (errpos)
+                *errpos = op->offset;
             exprTokenRelease(op);
             exprFree(es);
             return NULL;
@@ -683,7 +700,8 @@ exprstate *exprCompile(char *expr, int *errpos) {
 
 /* Convert a token to its numeric value. For strings we attempt to parse them
  * as numbers, returning 0 if conversion fails. */
-double exprTokenToNum(exprtoken *t) {
+double exprTokenToNum(exprtoken *t)
+{
     char buf[256];
     if (t->token_type == EXPR_TOKEN_NUM) {
         return t->num;
@@ -699,7 +717,8 @@ double exprTokenToNum(exprtoken *t) {
 }
 
 /* Convert object to true/false (0 or 1) */
-double exprTokenToBool(exprtoken *t) {
+double exprTokenToBool(exprtoken *t)
+{
     if (t->token_type == EXPR_TOKEN_NUM) {
         return t->num != 0;
     } else if (t->token_type == EXPR_TOKEN_STR && t->str.len == 0) {
@@ -712,11 +731,11 @@ double exprTokenToBool(exprtoken *t) {
 }
 
 /* Compare two tokens. Returns true if they are equal. */
-int exprTokensEqual(exprtoken *a, exprtoken *b) {
+int exprTokensEqual(exprtoken *a, exprtoken *b)
+{
     // If both are strings, do string comparison.
     if (a->token_type == EXPR_TOKEN_STR && b->token_type == EXPR_TOKEN_STR) {
-        return a->str.len == b->str.len &&
-               memcmp(a->str.start, b->str.start, a->str.len) == 0;
+        return a->str.len == b->str.len && memcmp(a->str.start, b->str.start, a->str.len) == 0;
     }
 
     // If both are numbers, do numeric comparison.
@@ -735,12 +754,14 @@ int exprTokensEqual(exprtoken *a, exprtoken *b) {
 }
 
 /* Return true if the string a is a substring of b. */
-int exprTokensStringIn(exprtoken *a, exprtoken *b) {
-    RedisModule_Assert(a->token_type == EXPR_TOKEN_STR &&
-                       b->token_type == EXPR_TOKEN_STR);
-    if (a->str.len > b->str.len) return 0; // A is bigger, can't be a substring.
+int exprTokensStringIn(exprtoken *a, exprtoken *b)
+{
+    RedisModule_Assert(a->token_type == EXPR_TOKEN_STR && b->token_type == EXPR_TOKEN_STR);
+    if (a->str.len > b->str.len)
+        return 0; // A is bigger, can't be a substring.
     for (size_t i = 0; i <= b->str.len - a->str.len; i++) {
-        if (memcmp(b->str.start+i,a->str.start,a->str.len) == 0) return 1;
+        if (memcmp(b->str.start + i, a->str.start, a->str.len) == 0)
+            return 1;
     }
     return 0;
 }
@@ -750,7 +771,8 @@ int exprTokensStringIn(exprtoken *a, exprtoken *b) {
 /* Execute the compiled expression program. Returns 1 if the final stack value
  * evaluates to true, 0 otherwise. Also returns 0 if any selector callback
  * fails. */
-int exprRun(exprstate *es, char *json, size_t json_len) {
+int exprRun(exprstate *es, char *json, size_t json_len)
+{
     exprStackReset(&es->values_stack);
 
     // Execute each instruction in the program.
@@ -761,11 +783,12 @@ int exprRun(exprstate *es, char *json, size_t json_len) {
         if (t->token_type == EXPR_TOKEN_SELECTOR) {
             exprtoken *obj = NULL;
             if (t->str.len > 0)
-                obj = jsonExtractField(json,json_len,t->str.start,t->str.len);
+                obj = jsonExtractField(json, json_len, t->str.start, t->str.len);
 
             // Selector not found or JSON object not convertible to
             // expression tokens. Evaluate the expression to false.
-            if (obj == NULL) return 0;
+            if (obj == NULL)
+                return 0;
             exprStackPush(&es->values_stack, obj);
             continue;
         }
@@ -787,7 +810,7 @@ int exprRun(exprstate *es, char *json, size_t json_len) {
             a = exprStackPop(&es->values_stack);
         }
 
-        switch(t->opcode) {
+        switch (t->opcode) {
         case EXPR_OP_NOT:
             result->num = exprTokenToBool(b) == 0 ? 1 : 0;
             break;
@@ -837,28 +860,24 @@ int exprRun(exprstate *es, char *json, size_t json_len) {
             /* For 'in' operator, b must be a tuple, and we check for
              * membership. Otherwise both a and b must be strings, and
              * in this case we check if a is a substring of b. */
-            result->num = 0;  // Default to false.
+            result->num = 0; // Default to false.
             if (b->token_type == EXPR_TOKEN_TUPLE) {
                 for (size_t j = 0; j < b->tuple.len; j++) {
                     if (exprTokensEqual(a, b->tuple.ele[j])) {
-                        result->num = 1;  // Found a match.
+                        result->num = 1; // Found a match.
                         break;
                     }
                 }
-            } else if (a->token_type == EXPR_TOKEN_STR &&
-                       b->token_type == EXPR_TOKEN_STR)
-            {
-                result->num = exprTokensStringIn(a,b);
+            } else if (a->token_type == EXPR_TOKEN_STR && b->token_type == EXPR_TOKEN_STR) {
+                result->num = exprTokensStringIn(a, b);
             }
             break;
         }
         case EXPR_OP_AND:
-            result->num =
-                exprTokenToBool(a) != 0 && exprTokenToBool(b) != 0 ? 1 : 0;
+            result->num = exprTokenToBool(a) != 0 && exprTokenToBool(b) != 0 ? 1 : 0;
             break;
         case EXPR_OP_OR:
-            result->num =
-                exprTokenToBool(a) != 0 || exprTokenToBool(b) != 0 ? 1 : 0;
+            result->num = exprTokenToBool(a) != 0 || exprTokenToBool(b) != 0 ? 1 : 0;
             break;
         default:
             // Do nothing: we don't want runtime errors.
@@ -866,14 +885,16 @@ int exprRun(exprstate *es, char *json, size_t json_len) {
         }
 
         // Free operands and push result.
-        if (a) exprTokenRelease(a);
+        if (a)
+            exprTokenRelease(a);
         exprTokenRelease(b);
         exprStackPush(&es->values_stack, result);
     }
 
     // Get final result from stack.
     exprtoken *final = exprStackPop(&es->values_stack);
-    if (final == NULL) return 0;
+    if (final == NULL)
+        return 0;
 
     // Convert result to boolean.
     int retval = exprTokenToBool(final);
@@ -886,36 +907,38 @@ int exprRun(exprstate *es, char *json, size_t json_len) {
 #ifdef TEST_MAIN
 #include "fastjson_test.c"
 
-void exprPrintToken(exprtoken *t) {
-    switch(t->token_type) {
-        case EXPR_TOKEN_EOF:
-            printf("EOF");
-            break;
-        case EXPR_TOKEN_NUM:
-            printf("NUM:%g", t->num);
-            break;
-        case EXPR_TOKEN_STR:
-            printf("STR:\"%.*s\"", (int)t->str.len, t->str.start);
-            break;
-        case EXPR_TOKEN_SELECTOR:
-            printf("SEL:%.*s", (int)t->str.len, t->str.start);
-            break;
-        case EXPR_TOKEN_OP:
-            printf("OP:");
-            for (int i = 0; ExprOptable[i].opname != NULL; i++) {
-                if (ExprOptable[i].opcode == t->opcode) {
-                    printf("%s", ExprOptable[i].opname);
-                    break;
-                }
+void exprPrintToken(exprtoken *t)
+{
+    switch (t->token_type) {
+    case EXPR_TOKEN_EOF:
+        printf("EOF");
+        break;
+    case EXPR_TOKEN_NUM:
+        printf("NUM:%g", t->num);
+        break;
+    case EXPR_TOKEN_STR:
+        printf("STR:\"%.*s\"", (int)t->str.len, t->str.start);
+        break;
+    case EXPR_TOKEN_SELECTOR:
+        printf("SEL:%.*s", (int)t->str.len, t->str.start);
+        break;
+    case EXPR_TOKEN_OP:
+        printf("OP:");
+        for (int i = 0; ExprOptable[i].opname != NULL; i++) {
+            if (ExprOptable[i].opcode == t->opcode) {
+                printf("%s", ExprOptable[i].opname);
+                break;
             }
-            break;
-        default:
-            printf("UNKNOWN");
-            break;
+        }
+        break;
+    default:
+        printf("UNKNOWN");
+        break;
     }
 }
 
-void exprPrintStack(exprstack *stack, const char *name) {
+void exprPrintStack(exprstack *stack, const char *name)
+{
     printf("%s (%d items):", name, stack->numitems);
     for (int j = 0; j < stack->numitems; j++) {
         printf(" ");
@@ -924,7 +947,8 @@ void exprPrintStack(exprstack *stack, const char *name) {
     printf("\n");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     /* Check for JSON parser test mode. */
     if (argc >= 2 && strcmp(argv[1], "--test-json-parser") == 0) {
         run_fastjson_test();
@@ -933,24 +957,26 @@ int main(int argc, char **argv) {
 
     char *testexpr = "(5+2)*3 and .year > 1980 and 'foo' == 'foo'";
     char *testjson = "{\"year\": 1984, \"name\": \"The Matrix\"}";
-    if (argc >= 2) testexpr = argv[1];
-    if (argc >= 3) testjson = argv[2];
+    if (argc >= 2)
+        testexpr = argv[1];
+    if (argc >= 3)
+        testjson = argv[2];
 
     printf("Compiling expression: %s\n", testexpr);
 
     int errpos = 0;
-    exprstate *es = exprCompile(testexpr,&errpos);
+    exprstate *es = exprCompile(testexpr, &errpos);
     if (es == NULL) {
-        printf("Compilation failed near \"...%s\"\n", testexpr+errpos);
+        printf("Compilation failed near \"...%s\"\n", testexpr + errpos);
         return 1;
     }
 
     exprPrintStack(&es->tokens, "Tokens");
     exprPrintStack(&es->program, "Program");
     printf("Running against object: %s\n", testjson);
-    int result = exprRun(es,testjson,strlen(testjson));
+    int result = exprRun(es, testjson, strlen(testjson));
     printf("Result1: %s\n", result ? "True" : "False");
-    result = exprRun(es,testjson,strlen(testjson));
+    result = exprRun(es, testjson, strlen(testjson));
     printf("Result2: %s\n", result ? "True" : "False");
 
     exprFree(es);

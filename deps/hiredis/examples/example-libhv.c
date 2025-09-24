@@ -1,22 +1,25 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
-#include <hiredis.h>
-#include <async.h>
 #include <adapters/libhv.h>
+#include <async.h>
+#include <hiredis.h>
 
-void getCallback(redisAsyncContext *c, void *r, void *privdata) {
+void getCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     redisReply *reply = r;
-    if (reply == NULL) return;
-    printf("argv[%s]: %s\n", (char*)privdata, reply->str);
+    if (reply == NULL)
+        return;
+    printf("argv[%s]: %s\n", (char *)privdata, reply->str);
 
     /* Disconnect after receiving the reply to GET */
     redisAsyncDisconnect(c);
 }
 
-void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
+void debugCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     (void)privdata;
     redisReply *reply = r;
 
@@ -28,7 +31,8 @@ void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
     redisAsyncDisconnect(c);
 }
 
-void connectCallback(const redisAsyncContext *c, int status) {
+void connectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
         return;
@@ -36,7 +40,8 @@ void connectCallback(const redisAsyncContext *c, int status) {
     printf("Connected...\n");
 }
 
-void disconnectCallback(const redisAsyncContext *c, int status) {
+void disconnectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
         return;
@@ -44,7 +49,8 @@ void disconnectCallback(const redisAsyncContext *c, int status) {
     printf("Disconnected...\n");
 }
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv)
+{
 #ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
 #endif
@@ -56,13 +62,13 @@ int main (int argc, char **argv) {
         return 1;
     }
 
-    hloop_t* loop = hloop_new(HLOOP_FLAG_QUIT_WHEN_NO_ACTIVE_EVENTS);
+    hloop_t *loop = hloop_new(HLOOP_FLAG_QUIT_WHEN_NO_ACTIVE_EVENTS);
     redisLibhvAttach(c, loop);
     redisAsyncSetTimeout(c, (struct timeval){.tv_sec = 0, .tv_usec = 500000});
-    redisAsyncSetConnectCallback(c,connectCallback);
-    redisAsyncSetDisconnectCallback(c,disconnectCallback);
-    redisAsyncCommand(c, NULL, NULL, "SET key %b", argv[argc-1], strlen(argv[argc-1]));
-    redisAsyncCommand(c, getCallback, (char*)"end-1", "GET key");
+    redisAsyncSetConnectCallback(c, connectCallback);
+    redisAsyncSetDisconnectCallback(c, disconnectCallback);
+    redisAsyncCommand(c, NULL, NULL, "SET key %b", argv[argc - 1], strlen(argv[argc - 1]));
+    redisAsyncCommand(c, getCallback, (char *)"end-1", "GET key");
     redisAsyncCommand(c, debugCallback, NULL, "DEBUG SLEEP %d", 1);
     hloop_run(loop);
     hloop_free(&loop);

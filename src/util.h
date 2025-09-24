@@ -10,13 +10,13 @@
 #ifndef __REDIS_UTIL_H
 #define __REDIS_UTIL_H
 
-#include <stdint.h>
 #include "sds.h"
+#include <stdint.h>
 
 /* The maximum number of characters needed to represent a long double
  * as a string (long double has a huge range of some 4952 chars, see LDBL_MAX).
  * This should be the size of the buffer given to ld2string */
-#define MAX_LONG_DOUBLE_CHARS 5*1024
+#define MAX_LONG_DOUBLE_CHARS 5 * 1024
 
 /* The maximum number of characters needed to represent a double
  * as a string (double has a huge range of some 328 chars, see DBL_MAX).
@@ -28,17 +28,16 @@
 #define MAX_D2STRING_CHARS 128
 
 /* Bytes needed for long -> str + '\0' */
-#define LONG_STR_SIZE      21
+#define LONG_STR_SIZE 21
 
 /* long double to string conversion options */
 typedef enum {
-    LD_STR_AUTO,     /* %.17Lg */
-    LD_STR_HUMAN,    /* %.17Lf + Trimming of trailing zeros */
-    LD_STR_HEX       /* %La */
+    LD_STR_AUTO,  /* %.17Lg */
+    LD_STR_HUMAN, /* %.17Lf + Trimming of trailing zeros */
+    LD_STR_HEX    /* %La */
 } ld2string_mode;
 
-int prefixmatch(const char *pattern, int patternLen, const char *prefixStr, 
-                int prefixStrLen, int nocase);
+int prefixmatch(const char *pattern, int patternLen, const char *prefixStr, int prefixStrLen, int nocase);
 int stringmatchlen(const char *p, int plen, const char *s, int slen, int nocase);
 int stringmatch(const char *p, const char *s, int nocase);
 int stringmatchlen_fuzz_test(void);
@@ -74,8 +73,7 @@ int reclaimFilePageCache(int fd, size_t offset, size_t length);
 char *fgets_async_signal_safe(char *dest, int buff_size, int fd);
 int vsnprintf_async_signal_safe(char *to, size_t size, const char *format, va_list ap);
 #ifdef __GNUC__
-int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...)
-    __attribute__((format(printf, 3, 4)));
+int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 #else
 int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...);
 #endif
@@ -83,16 +81,17 @@ size_t redis_strlcpy(char *dst, const char *src, size_t dsize);
 size_t redis_strlcat(char *dst, const char *src, size_t dsize);
 
 /* to keep it opt without conditions Works only for: 0 < x < 2^63 */
-static inline int log2ceil(size_t x) {
+static inline int log2ceil(size_t x)
+{
 #if UINTPTR_MAX == 0xffffffffffffffff
-    return  63 - __builtin_clzll(x);
+    return 63 - __builtin_clzll(x);
 #else
     return 31 - __builtin_clz(x);
 #endif
 }
 
 #ifndef static_assert
-#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1:-1]
+#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1 : -1]
 #endif
 
 #ifdef REDIS_TEST

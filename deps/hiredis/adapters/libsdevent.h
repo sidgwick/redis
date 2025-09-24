@@ -1,8 +1,8 @@
 #ifndef HIREDIS_LIBSDEVENT_H
 #define HIREDIS_LIBSDEVENT_H
-#include <systemd/sd-event.h>
-#include "../hiredis.h"
 #include "../async.h"
+#include "../hiredis.h"
+#include <systemd/sd-event.h>
 
 #define REDIS_LIBSDEVENT_DELETED 0x01
 #define REDIS_LIBSDEVENT_ENTERED 0x02
@@ -17,7 +17,8 @@ typedef struct redisLibsdeventEvents {
     short state;
 } redisLibsdeventEvents;
 
-static void redisLibsdeventDestroy(redisLibsdeventEvents *e) {
+static void redisLibsdeventDestroy(redisLibsdeventEvents *e)
+{
     if (e->fdSource) {
         e->fdSource = sd_event_source_disable_unref(e->fdSource);
     }
@@ -28,23 +29,26 @@ static void redisLibsdeventDestroy(redisLibsdeventEvents *e) {
     hi_free(e);
 }
 
-static int redisLibsdeventTimeoutHandler(sd_event_source *s, uint64_t usec, void *userdata) {
+static int redisLibsdeventTimeoutHandler(sd_event_source *s, uint64_t usec, void *userdata)
+{
     ((void)s);
     ((void)usec);
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
     redisAsyncHandleTimeout(e->context);
     return 0;
 }
 
-static int redisLibsdeventHandler(sd_event_source *s, int fd, uint32_t event, void *userdata) {
+static int redisLibsdeventHandler(sd_event_source *s, int fd, uint32_t event, void *userdata)
+{
     ((void)s);
     ((void)fd);
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
     e->state |= REDIS_LIBSDEVENT_ENTERED;
 
-#define CHECK_DELETED() if (e->state & REDIS_LIBSDEVENT_DELETED) {\
-        redisLibsdeventDestroy(e);\
-        return 0; \
+#define CHECK_DELETED()                                                                                                \
+    if (e->state & REDIS_LIBSDEVENT_DELETED) {                                                                         \
+        redisLibsdeventDestroy(e);                                                                                     \
+        return 0;                                                                                                      \
     }
 
     if ((event & EPOLLIN) && e->context && (e->state & REDIS_LIBSDEVENT_DELETED) == 0) {
@@ -63,8 +67,9 @@ static int redisLibsdeventHandler(sd_event_source *s, int fd, uint32_t event, vo
     return 0;
 }
 
-static void redisLibsdeventAddRead(void *userdata) {
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+static void redisLibsdeventAddRead(void *userdata)
+{
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     if (e->flags & EPOLLIN) {
         return;
@@ -79,8 +84,9 @@ static void redisLibsdeventAddRead(void *userdata) {
     }
 }
 
-static void redisLibsdeventDelRead(void *userdata) {
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+static void redisLibsdeventDelRead(void *userdata)
+{
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     e->flags &= ~EPOLLIN;
 
@@ -91,8 +97,9 @@ static void redisLibsdeventDelRead(void *userdata) {
     }
 }
 
-static void redisLibsdeventAddWrite(void *userdata) {
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+static void redisLibsdeventAddWrite(void *userdata)
+{
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     if (e->flags & EPOLLOUT) {
         return;
@@ -107,8 +114,9 @@ static void redisLibsdeventAddWrite(void *userdata) {
     }
 }
 
-static void redisLibsdeventDelWrite(void *userdata) {
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+static void redisLibsdeventDelWrite(void *userdata)
+{
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     e->flags &= ~EPOLLOUT;
 
@@ -119,8 +127,9 @@ static void redisLibsdeventDelWrite(void *userdata) {
     }
 }
 
-static void redisLibsdeventCleanup(void *userdata) {
-    redisLibsdeventEvents *e = (redisLibsdeventEvents*)userdata;
+static void redisLibsdeventCleanup(void *userdata)
+{
+    redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     if (!e) {
         return;
@@ -133,18 +142,21 @@ static void redisLibsdeventCleanup(void *userdata) {
     }
 }
 
-static void redisLibsdeventSetTimeout(void *userdata, struct timeval tv) {
+static void redisLibsdeventSetTimeout(void *userdata, struct timeval tv)
+{
     redisLibsdeventEvents *e = (redisLibsdeventEvents *)userdata;
 
     uint64_t usec = tv.tv_sec * 1000000 + tv.tv_usec;
     if (!e->timerSource) {
-        sd_event_add_time_relative(e->event, &e->timerSource, CLOCK_MONOTONIC, usec, 1, redisLibsdeventTimeoutHandler, e);
+        sd_event_add_time_relative(e->event, &e->timerSource, CLOCK_MONOTONIC, usec, 1, redisLibsdeventTimeoutHandler,
+                                   e);
     } else {
         sd_event_source_set_time_relative(e->timerSource, usec);
     }
 }
 
-static int redisLibsdeventAttach(redisAsyncContext *ac, struct sd_event *event) {
+static int redisLibsdeventAttach(redisAsyncContext *ac, struct sd_event *event)
+{
     redisContext *c = &(ac->c);
     redisLibsdeventEvents *e;
 
@@ -153,7 +165,7 @@ static int redisLibsdeventAttach(redisAsyncContext *ac, struct sd_event *event) 
         return REDIS_ERR;
 
     /* Create container for context and r/w events */
-    e = (redisLibsdeventEvents*)hi_calloc(1, sizeof(*e));
+    e = (redisLibsdeventEvents *)hi_calloc(1, sizeof(*e));
     if (e == NULL)
         return REDIS_ERR;
 

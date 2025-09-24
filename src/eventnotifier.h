@@ -24,7 +24,7 @@ typedef struct eventNotifier {
 #endif
 } eventNotifier;
 
-eventNotifier* createEventNotifier(void);
+eventNotifier *createEventNotifier(void);
 int getReadEventFd(struct eventNotifier *en);
 int getWriteEventFd(struct eventNotifier *en);
 int triggerEventNotifier(struct eventNotifier *en);

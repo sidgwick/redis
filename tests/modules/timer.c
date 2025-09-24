@@ -75,7 +75,7 @@ int test_stoptimer(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 
     int ret = 0;
     RedisModuleString *keyname;
-    if (RedisModule_StopTimer(ctx, id, (void **) &keyname) == REDISMODULE_OK) {
+    if (RedisModule_StopTimer(ctx, id, (void **)&keyname) == REDISMODULE_OK) {
         RedisModule_FreeString(ctx, keyname);
         ret = 1;
     }
@@ -84,18 +84,18 @@ int test_stoptimer(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
-    if (RedisModule_Init(ctx,"timer",1,REDISMODULE_APIVER_1)== REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "timer", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"test.createtimer", test_createtimer,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "test.createtimer", test_createtimer, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
-    if (RedisModule_CreateCommand(ctx,"test.gettimer", test_gettimer,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "test.gettimer", test_gettimer, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
-    if (RedisModule_CreateCommand(ctx,"test.stoptimer", test_stoptimer,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "test.stoptimer", test_stoptimer, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;

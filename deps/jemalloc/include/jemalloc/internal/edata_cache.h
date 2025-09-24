@@ -14,10 +14,10 @@
 
 typedef struct edata_cache_s edata_cache_t;
 struct edata_cache_s {
-	edata_avail_t avail;
-	atomic_zu_t count;
-	malloc_mutex_t mtx;
-	base_t *base;
+    edata_avail_t avail;
+    atomic_zu_t count;
+    malloc_mutex_t mtx;
+    base_t *base;
 };
 
 bool edata_cache_init(edata_cache_t *edata_cache, base_t *base);
@@ -35,15 +35,15 @@ void edata_cache_postfork_child(tsdn_t *tsdn, edata_cache_t *edata_cache);
 
 typedef struct edata_cache_fast_s edata_cache_fast_t;
 struct edata_cache_fast_s {
-	edata_list_inactive_t list;
-	edata_cache_t *fallback;
-	bool disabled;
+    edata_list_inactive_t list;
+    edata_cache_t *fallback;
+    bool disabled;
 };
 
 void edata_cache_fast_init(edata_cache_fast_t *ecs, edata_cache_t *fallback);
 edata_t *edata_cache_fast_get(tsdn_t *tsdn, edata_cache_fast_t *ecs);
-void edata_cache_fast_put(tsdn_t *tsdn, edata_cache_fast_t *ecs,
-    edata_t *edata);
+void edata_cache_fast_put(
+  tsdn_t *tsdn, edata_cache_fast_t *ecs, edata_t *edata);
 void edata_cache_fast_disable(tsdn_t *tsdn, edata_cache_fast_t *ecs);
 
 #endif /* JEMALLOC_INTERNAL_EDATA_CACHE_H */

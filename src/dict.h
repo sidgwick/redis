@@ -25,22 +25,22 @@
 #define DICT_ERR 1
 
 /* Hash table parameters */
-#define HASHTABLE_MIN_FILL        8      /* Minimal hash table fill 12.5%(100/8) */
+#define HASHTABLE_MIN_FILL 8 /* Minimal hash table fill 12.5%(100/8) */
 
 typedef struct dictEntry dictEntry; /* opaque */
 typedef struct dict dict;
 typedef dictEntry **dictEntryLink; /* See description of dictFindLink() */
 
 /* Searching for a key in a dict may involve few comparisons.
- * If extracting the looked-up key is expensive (e.g., sdslen(), kvobjGetKey()),  
- * caching can be used to reduce those repetitive computations.  
- *  
- * This struct, passed to the comparison function as temporary caching, if 
- * needed by the function across comparison of a given lookup. 
+ * If extracting the looked-up key is expensive (e.g., sdslen(), kvobjGetKey()),
+ * caching can be used to reduce those repetitive computations.
+ *
+ * This struct, passed to the comparison function as temporary caching, if
+ * needed by the function across comparison of a given lookup.
  * for the looked-up key and resets before each new lookup. */
 typedef struct dictCmpCache {
     int useCache;
-    
+
     union {
         uint64_t u64;
         int64_t i64;
@@ -77,16 +77,16 @@ typedef struct dictType {
     /* Flags */
     /* The 'no_value' flag, if set, indicates that values are not used, i.e. the
      * dict is a set. When this flag is set, it's not possible to access the
-     * value of a dictEntry and it's also impossible to use dictSetKey(). It 
-     * enables an optimization to store a key directly without an allocating 
+     * value of a dictEntry and it's also impossible to use dictSetKey(). It
+     * enables an optimization to store a key directly without an allocating
      * dictEntry in between, if it is the only key in the bucket. */
-    unsigned int no_value:1;
+    unsigned int no_value : 1;
     /* This flag is required for `no_value` optimization since the optimization
-     * reuses LSB bits as metadata */ 
-    unsigned int keys_are_odd:1;
+     * reuses LSB bits as metadata */
+    unsigned int keys_are_odd : 1;
 
     /* Ensures that the entire hash table is rehashed at once if set. */
-    unsigned int force_full_rehash:1;
+    unsigned int force_full_rehash : 1;
 
     /* Sometimes we want the ability to store a key in a given way inside the hash
      * function, and lookup it in some other way without resorting to any kind of
@@ -116,8 +116,8 @@ typedef struct dictType {
     void (*onDictRelease)(dict *d);
 } dictType;
 
-#define DICTHT_SIZE(exp) ((exp) == -1 ? 0 : (unsigned long)1<<(exp))
-#define DICTHT_SIZE_MASK(exp) ((exp) == -1 ? 0 : (DICTHT_SIZE(exp))-1)
+#define DICTHT_SIZE(exp) ((exp) == -1 ? 0 : (unsigned long)1 << (exp))
+#define DICTHT_SIZE_MASK(exp) ((exp) == -1 ? 0 : (DICTHT_SIZE(exp)) - 1)
 
 struct dict {
     dictType *type;
@@ -131,8 +131,8 @@ struct dict {
     unsigned pauserehash : 15; /* If >0 rehashing is paused */
 
     unsigned useStoredKeyApi : 1; /* See comment of storedHashFunction above */
-    signed char ht_size_exp[2]; /* exponent of size. (size = 1<<exp) */
-    int16_t pauseAutoResize;  /* If >0 automatic resizing is disallowed (<0 indicates coding error) */
+    signed char ht_size_exp[2];   /* exponent of size. (size = 1<<exp) */
+    int16_t pauseAutoResize;      /* If >0 automatic resizing is disallowed (<0 indicates coding error) */
     void *metadata[];
 };
 
@@ -159,7 +159,7 @@ typedef struct dictStats {
     unsigned long *clvector;
 } dictStats;
 
-typedef void (dictScanFunction)(void *privdata, const dictEntry *de, dictEntry **plink);
+typedef void(dictScanFunction)(void *privdata, const dictEntry *de, dictEntry **plink);
 typedef void *(dictDefragAllocFunction)(void *ptr);
 typedef struct {
     dictDefragAllocFunction *defragAlloc; /* Used for entries etc. */
@@ -168,25 +168,25 @@ typedef struct {
 } dictDefragFunctions;
 
 /* This is the initial size of every hash table */
-#define DICT_HT_INITIAL_EXP      2
-#define DICT_HT_INITIAL_SIZE     (1<<(DICT_HT_INITIAL_EXP))
+#define DICT_HT_INITIAL_EXP 2
+#define DICT_HT_INITIAL_SIZE (1 << (DICT_HT_INITIAL_EXP))
 
 /* ------------------------------- Macros ------------------------------------*/
-#define dictFreeVal(d, entry) do {                     \
-    if ((d)->type->valDestructor)                      \
-        (d)->type->valDestructor((d), dictGetVal(entry)); \
-   } while(0)
+#define dictFreeVal(d, entry)                                                                                          \
+    do {                                                                                                               \
+        if ((d)->type->valDestructor)                                                                                  \
+            (d)->type->valDestructor((d), dictGetVal(entry));                                                          \
+    } while (0)
 
-#define dictFreeKey(d, entry) \
-    if ((d)->type->keyDestructor) \
-        (d)->type->keyDestructor((d), dictGetKey(entry))
+#define dictFreeKey(d, entry)                                                                                          \
+    if ((d)->type->keyDestructor)                                                                                      \
+    (d)->type->keyDestructor((d), dictGetKey(entry))
 
 #define dictMetadata(d) (&(d)->metadata)
-#define dictMetadataSize(d) ((d)->type->dictMetadataBytes \
-                             ? (d)->type->dictMetadataBytes(d) : 0)
+#define dictMetadataSize(d) ((d)->type->dictMetadataBytes ? (d)->type->dictMetadataBytes(d) : 0)
 
-#define dictBuckets(d) (DICTHT_SIZE((d)->ht_size_exp[0])+DICTHT_SIZE((d)->ht_size_exp[1]))
-#define dictSize(d) ((d)->ht_used[0]+(d)->ht_used[1])
+#define dictBuckets(d) (DICTHT_SIZE((d)->ht_size_exp[0]) + DICTHT_SIZE((d)->ht_size_exp[1]))
+#define dictSize(d) ((d)->ht_used[0] + (d)->ht_used[1])
 #define dictIsEmpty(d) ((d)->ht_used[0] == 0 && (d)->ht_used[1] == 0)
 #define dictIsRehashing(d) ((d)->rehashidx != -1)
 #define dictPauseRehashing(d) ((d)->pauserehash++)
@@ -198,7 +198,7 @@ typedef struct {
 
 /* If our unsigned long type can store a 64 bit number, use a 64 bit PRNG. */
 #if ULONG_MAX >= 0xffffffffffffffff
-#define randomULong() ((unsigned long) genrand64_int64())
+#define randomULong() ((unsigned long)genrand64_int64())
 #else
 #define randomULong() random()
 #endif
@@ -225,7 +225,7 @@ void dictFreeUnlinkedEntry(dict *d, dictEntry *he);
 dictEntryLink dictTwoPhaseUnlinkFind(dict *d, const void *key, int *table_index);
 void dictTwoPhaseUnlinkFree(dict *d, dictEntryLink llink, int table_index);
 void dictRelease(dict *d);
-dictEntry * dictFind(dict *d, const void *key);
+dictEntry *dictFind(dict *d, const void *key);
 int dictShrinkIfNeeded(dict *d);
 int dictExpandIfNeeded(dict *d);
 void *dictGetKey(const dictEntry *de);
@@ -247,26 +247,27 @@ unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);
 void dictGetStats(char *buf, size_t bufsize, dict *d, int full);
 uint64_t dictGenHashFunction(const void *key, size_t len);
 uint64_t dictGenCaseHashFunction(const unsigned char *buf, size_t len);
-void dictEmpty(dict *d, void(callback)(dict*));
+void dictEmpty(dict *d, void(callback)(dict *));
 void dictSetResizeEnabled(dictResizeEnable enable);
 int dictRehash(dict *d, int n);
 int dictRehashMicroseconds(dict *d, uint64_t us);
 void dictSetHashFunctionSeed(uint8_t *seed);
 unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, void *privdata);
-unsigned long dictScanDefrag(dict *d, unsigned long v, dictScanFunction *fn, dictDefragFunctions *defragfns, void *privdata);
+unsigned long dictScanDefrag(dict *d, unsigned long v, dictScanFunction *fn, dictDefragFunctions *defragfns,
+                             void *privdata);
 uint64_t dictGetHash(dict *d, const void *key);
 void dictRehashingInfo(dict *d, unsigned long long *from_size, unsigned long long *to_size);
 
 size_t dictGetStatsMsg(char *buf, size_t bufsize, dictStats *stats, int full);
-dictStats* dictGetStatsHt(dict *d, int htidx, int full);
+dictStats *dictGetStatsHt(dict *d, int htidx, int full);
 void dictCombineStats(dictStats *from, dictStats *into);
 void dictFreeStats(dictStats *stats);
 
 dictEntryLink dictFindLink(dict *d, const void *key, dictEntryLink *bucket);
 void dictSetKeyAtLink(dict *d, void *key, dictEntryLink *link, int newItem);
 
-/* API relevant only when dict is used as a hash-map (no_value=0) */ 
-void dictSetKey(dict *d, dictEntry* de, void *key);
+/* API relevant only when dict is used as a hash-map (no_value=0) */
+void dictSetKey(dict *d, dictEntry *de, void *key);
 void dictSetVal(dict *d, dictEntry *de, void *val);
 void *dictGetVal(const dictEntry *de);
 void dictSetDoubleVal(dictEntry *de, double val);
@@ -277,18 +278,19 @@ void dictSetUnsignedIntegerVal(dictEntry *de, uint64_t val);
 uint64_t dictIncrUnsignedIntegerVal(dictEntry *de, uint64_t val);
 uint64_t dictGetUnsignedIntegerVal(const dictEntry *de);
 
-#define dictForEach(d, ty, m, ...) do { \
-    dictIterator di; \
-    dictEntry *de; \
-    dictInitIterator(&di, d); \
-    while ((de = dictNext(&di)) != NULL) { \
-        ty *m = dictGetVal(de); \
-        do { \
-            __VA_ARGS__ \
-        } while(0); \
-    } \
-    dictResetIterator(&di); \
-} while(0);
+#define dictForEach(d, ty, m, ...)                                                                                     \
+    do {                                                                                                               \
+        dictIterator di;                                                                                               \
+        dictEntry *de;                                                                                                 \
+        dictInitIterator(&di, d);                                                                                      \
+        while ((de = dictNext(&di)) != NULL) {                                                                         \
+            ty *m = dictGetVal(de);                                                                                    \
+            do {                                                                                                       \
+                __VA_ARGS__                                                                                            \
+            } while (0);                                                                                               \
+        }                                                                                                              \
+        dictResetIterator(&di);                                                                                        \
+    } while (0);
 
 #ifdef REDIS_TEST
 int dictTest(int argc, char *argv[], int flags);

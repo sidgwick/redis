@@ -3,8 +3,8 @@
 
 typedef struct prof_stats_s prof_stats_t;
 struct prof_stats_s {
-	uint64_t req_sum;
-	uint64_t count;
+    uint64_t req_sum;
+    uint64_t count;
 };
 
 extern malloc_mutex_t prof_stats_mtx;

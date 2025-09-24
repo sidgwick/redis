@@ -10,10 +10,10 @@
  * GNU Affero General Public License v3 (AGPLv3).
  */
 
-#include "server.h"
-#include "bio.h"
 #include "atomicvar.h"
+#include "bio.h"
 #include "script.h"
+#include "server.h"
 #include <math.h>
 
 /* ----------------------------------------------------------------------------
@@ -34,11 +34,11 @@
 #define EVPOOL_SIZE 16
 #define EVPOOL_CACHED_SDS_SIZE 255
 struct evictionPoolEntry {
-    unsigned long long idle;    /* Object idle time (inverse frequency for LFU) */
-    sds key;                    /* Key name. */
-    sds cached;                 /* Cached SDS object for key name. */
-    int dbid;                   /* Key DB number. */
-    int slot;                   /* Slot. */
+    unsigned long long idle; /* Object idle time (inverse frequency for LFU) */
+    sds key;                 /* Key name. */
+    sds cached;              /* Cached SDS object for key name. */
+    int dbid;                /* Key DB number. */
+    int slot;                /* Slot. */
 };
 
 static struct evictionPoolEntry *EvictionPoolLRU;
@@ -50,17 +50,19 @@ static struct evictionPoolEntry *EvictionPoolLRU;
 /* Return the LRU clock, based on the clock resolution. This is a time
  * in a reduced-bits format that can be used to set and check the
  * object->lru field of redisObject structures. */
-unsigned int getLRUClock(void) {
-    return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
+unsigned int getLRUClock(void)
+{
+    return (mstime() / LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
 
 /* This function is used to obtain the current LRU clock.
  * If the current resolution is lower than the frequency we refresh the
  * LRU clock (as it should be in production servers) we return the
  * precomputed value, otherwise we need to resort to a system call. */
-unsigned int LRU_CLOCK(void) {
+unsigned int LRU_CLOCK(void)
+{
     unsigned int lruclock;
-    if (1000/server.hz <= LRU_CLOCK_RESOLUTION) {
+    if (1000 / server.hz <= LRU_CLOCK_RESOLUTION) {
         lruclock = server.lruclock;
     } else {
         lruclock = getLRUClock();
@@ -70,13 +72,13 @@ unsigned int LRU_CLOCK(void) {
 
 /* Given an object returns the min number of milliseconds the object was never
  * requested, using an approximated LRU algorithm. */
-unsigned long long estimateObjectIdleTime(robj *o) {
+unsigned long long estimateObjectIdleTime(robj *o)
+{
     unsigned long long lruclock = LRU_CLOCK();
     if (lruclock >= o->lru) {
         return (lruclock - o->lru) * LRU_CLOCK_RESOLUTION;
     } else {
-        return (lruclock + (LRU_CLOCK_MAX - o->lru)) *
-                    LRU_CLOCK_RESOLUTION;
+        return (lruclock + (LRU_CLOCK_MAX - o->lru)) * LRU_CLOCK_RESOLUTION;
     }
 }
 
@@ -101,15 +103,16 @@ unsigned long long estimateObjectIdleTime(robj *o) {
  * evicted in the whole database. */
 
 /* Create a new eviction pool. */
-void evictionPoolAlloc(void) {
+void evictionPoolAlloc(void)
+{
     struct evictionPoolEntry *ep;
     int j;
 
-    ep = zmalloc(sizeof(*ep)*EVPOOL_SIZE);
+    ep = zmalloc(sizeof(*ep) * EVPOOL_SIZE);
     for (j = 0; j < EVPOOL_SIZE; j++) {
         ep[j].idle = 0;
         ep[j].key = NULL;
-        ep[j].cached = sdsnewlen(NULL,EVPOOL_CACHED_SDS_SIZE);
+        ep[j].cached = sdsnewlen(NULL, EVPOOL_CACHED_SDS_SIZE);
         ep[j].dbid = 0;
     }
     EvictionPoolLRU = ep;
@@ -123,19 +126,20 @@ void evictionPoolAlloc(void) {
  * We insert keys on place in ascending order, so keys with the smaller
  * idle time are on the left, and keys with the higher idle time on the
  * right. */
-int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEntry *pool) {
+int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEntry *pool)
+{
     int j, k, count;
     dictEntry *samples[server.maxmemory_samples];
 
     int slot = kvstoreGetFairRandomDictIndex(samplekvs);
-    count = kvstoreDictGetSomeKeys(samplekvs,slot,samples,server.maxmemory_samples);
+    count = kvstoreDictGetSomeKeys(samplekvs, slot, samples, server.maxmemory_samples);
     for (j = 0; j < count; j++) {
         unsigned long long idle;
-        
+
         dictEntry *de = samples[j];
         kvobj *kv = dictGetKV(de);
         sds key = kvobjGetKey(kv);
-        
+
         /* Calculate the idle time according to the policy. This is called
          * idle just because the code initially handled LRU, but is in fact
          * just a score where a higher score means better candidate. */
@@ -149,7 +153,7 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
              * first. So inside the pool we put objects using the inverted
              * frequency subtracting the actual frequency to the maximum
              * frequency of 255. */
-            idle = 255-LFUDecrAndReturn(kv);
+            idle = 255 - LFUDecrAndReturn(kv);
         } else if (server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL) {
             /* In this case the sooner the expire the better. */
             idle = ULLONG_MAX - kvobjGetExpire(kv);
@@ -161,10 +165,9 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
          * First, find the first empty bucket or the first populated
          * bucket that has an idle time smaller than our idle time. */
         k = 0;
-        while (k < EVPOOL_SIZE &&
-               pool[k].key &&
-               pool[k].idle < idle) k++;
-        if (k == 0 && pool[EVPOOL_SIZE-1].key != NULL) {
+        while (k < EVPOOL_SIZE && pool[k].key && pool[k].idle < idle)
+            k++;
+        if (k == 0 && pool[EVPOOL_SIZE - 1].key != NULL) {
             /* Can't insert if the element is < the worst element we have
              * and there are no empty buckets. */
             continue;
@@ -173,14 +176,13 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
         } else {
             /* Inserting in the middle. Now k points to the first element
              * greater than the element to insert.  */
-            if (pool[EVPOOL_SIZE-1].key == NULL) {
+            if (pool[EVPOOL_SIZE - 1].key == NULL) {
                 /* Free space on the right? Insert at k shifting
                  * all the elements from k to end to the right. */
 
                 /* Save SDS before overwriting. */
-                sds cached = pool[EVPOOL_SIZE-1].cached;
-                memmove(pool+k+1,pool+k,
-                    sizeof(pool[0])*(EVPOOL_SIZE-k-1));
+                sds cached = pool[EVPOOL_SIZE - 1].cached;
+                memmove(pool + k + 1, pool + k, sizeof(pool[0]) * (EVPOOL_SIZE - k - 1));
                 pool[k].cached = cached;
             } else {
                 /* No free space on right? Insert at k-1 */
@@ -188,8 +190,9 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
                 /* Shift all elements on the left of k (included) to the
                  * left, so we discard the element with smaller idle time. */
                 sds cached = pool[0].cached; /* Save SDS before overwriting. */
-                if (pool[0].key != pool[0].cached) sdsfree(pool[0].key);
-                memmove(pool,pool+1,sizeof(pool[0])*k);
+                if (pool[0].key != pool[0].cached)
+                    sdsfree(pool[0].key);
+                memmove(pool, pool + 1, sizeof(pool[0]) * k);
                 pool[k].cached = cached;
             }
         }
@@ -202,8 +205,8 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
         if (klen > EVPOOL_CACHED_SDS_SIZE) {
             pool[k].key = sdsdup(key);
         } else {
-            memcpy(pool[k].cached,key,klen+1);
-            sdssetlen(pool[k].cached,klen);
+            memcpy(pool[k].cached, key, klen + 1);
+            sdssetlen(pool[k].cached, klen);
             pool[k].key = pool[k].cached;
         }
         pool[k].idle = idle;
@@ -252,29 +255,36 @@ int evictionPoolPopulate(redisDb *db, kvstore *samplekvs, struct evictionPoolEnt
 /* Return the current time in minutes, just taking the least significant
  * 16 bits. The returned time is suitable to be stored as LDT (last access
  * time) for the LFU implementation. */
-unsigned long LFUGetTimeInMinutes(void) {
-    return (server.unixtime/60) & 65535;
+unsigned long LFUGetTimeInMinutes(void)
+{
+    return (server.unixtime / 60) & 65535;
 }
 
 /* Given an object ldt (last access time), compute the minimum number of minutes
  * that elapsed since the last access. Handle overflow (ldt greater than
  * the current 16 bits minutes time) considering the time as wrapping
  * exactly once. */
-unsigned long LFUTimeElapsed(unsigned long ldt) {
+unsigned long LFUTimeElapsed(unsigned long ldt)
+{
     unsigned long now = LFUGetTimeInMinutes();
-    if (now >= ldt) return now-ldt;
-    return 65535-ldt+now;
+    if (now >= ldt)
+        return now - ldt;
+    return 65535 - ldt + now;
 }
 
 /* Logarithmically increment a counter. The greater is the current counter value
  * the less likely is that it gets really incremented. Saturate it at 255. */
-uint8_t LFULogIncr(uint8_t counter) {
-    if (counter == 255) return 255;
-    double r = (double)rand()/RAND_MAX;
+uint8_t LFULogIncr(uint8_t counter)
+{
+    if (counter == 255)
+        return 255;
+    double r = (double)rand() / RAND_MAX;
     double baseval = counter - LFU_INIT_VAL;
-    if (baseval < 0) baseval = 0;
-    double p = 1.0/(baseval*server.lfu_log_factor+1);
-    if (r < p) counter++;
+    if (baseval < 0)
+        baseval = 0;
+    double p = 1.0 / (baseval * server.lfu_log_factor + 1);
+    if (r < p)
+        counter++;
     return counter;
 }
 
@@ -288,7 +298,8 @@ uint8_t LFULogIncr(uint8_t counter) {
  * This function is used in order to scan the dataset for the best object
  * to fit: as we check for the candidate, we incrementally decrement the
  * counter of the scanned objects if needed. */
-unsigned long LFUDecrAndReturn(robj *o) {
+unsigned long LFUDecrAndReturn(robj *o)
+{
     unsigned long ldt = o->lru >> 8;
     unsigned long counter = o->lru & 255;
     unsigned long num_periods = server.lfu_decay_time ? LFUTimeElapsed(ldt) / server.lfu_decay_time : 0;
@@ -305,7 +316,8 @@ unsigned long LFUDecrAndReturn(robj *o) {
  * massive eviction loop, even all keys are evicted.
  *
  * This function returns the sum of AOF and replication buffer. */
-size_t freeMemoryGetNotCountedMemory(void) {
+size_t freeMemoryGetNotCountedMemory(void)
+{
     size_t overhead = 0;
 
     /* Since all replicas and replication backlog share global replication
@@ -328,8 +340,7 @@ size_t freeMemoryGetNotCountedMemory(void) {
          * also occupies some extra memory, we can't know exact blocks numbers,
          * we only get approximate size according to per block size. */
         size_t extra_approx_size =
-            (server.repl_backlog_size/PROTO_REPLY_CHUNK_BYTES + 1) *
-            (sizeof(replBufBlock)+sizeof(listNode));
+            (server.repl_backlog_size / PROTO_REPLY_CHUNK_BYTES + 1) * (sizeof(replBufBlock) + sizeof(listNode));
         size_t counted_mem = server.repl_backlog_size + extra_approx_size;
         if (server.repl_buffer_mem > counted_mem) {
             overhead += (server.repl_buffer_mem - counted_mem);
@@ -366,40 +377,49 @@ size_t freeMemoryGetNotCountedMemory(void) {
  *              limit.
  *              (Populated both for C_ERR and C_OK)
  */
-int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *level) {
+int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *level)
+{
     size_t mem_reported, mem_used, mem_tofree;
 
     /* Check if we are over the memory usage limit. If we are not, no need
      * to subtract the slaves output buffers. We can just return ASAP. */
     mem_reported = zmalloc_used_memory();
-    if (total) *total = mem_reported;
+    if (total)
+        *total = mem_reported;
 
     /* We may return ASAP if there is no need to compute the level. */
     if (!server.maxmemory) {
-        if (level) *level = 0;
+        if (level)
+            *level = 0;
         return C_OK;
     }
-    if (mem_reported <= server.maxmemory && !level) return C_OK;
+    if (mem_reported <= server.maxmemory && !level)
+        return C_OK;
 
     /* Remove the size of slaves output buffers and AOF buffer from the
      * count of used memory. */
     mem_used = mem_reported;
     size_t overhead = freeMemoryGetNotCountedMemory();
-    mem_used = (mem_used > overhead) ? mem_used-overhead : 0;
+    mem_used = (mem_used > overhead) ? mem_used - overhead : 0;
 
     /* Compute the ratio of memory usage. */
-    if (level) *level = (float)mem_used / (float)server.maxmemory;
+    if (level)
+        *level = (float)mem_used / (float)server.maxmemory;
 
-    if (mem_reported <= server.maxmemory) return C_OK;
+    if (mem_reported <= server.maxmemory)
+        return C_OK;
 
     /* Check if we are still over the memory limit. */
-    if (mem_used <= server.maxmemory) return C_OK;
+    if (mem_used <= server.maxmemory)
+        return C_OK;
 
     /* Compute how much memory we need to free. */
     mem_tofree = mem_used - server.maxmemory;
 
-    if (logical) *logical = mem_used;
-    if (tofree) *tofree = mem_tofree;
+    if (logical)
+        *logical = mem_used;
+    if (tofree)
+        *tofree = mem_tofree;
 
     return C_ERR;
 }
@@ -407,12 +427,15 @@ int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *lev
 /* Return 1 if used memory is more than maxmemory after allocating more memory,
  * return 0 if not. Redis may reject user's requests or evict some keys if used
  * memory exceeds maxmemory, especially, when we allocate huge memory at once. */
-int overMaxmemoryAfterAlloc(size_t moremem) {
-    if (!server.maxmemory) return  0; /* No limit. */
+int overMaxmemoryAfterAlloc(size_t moremem)
+{
+    if (!server.maxmemory)
+        return 0; /* No limit. */
 
     /* Check quickly. */
     size_t mem_used = zmalloc_used_memory();
-    if (mem_used + moremem <= server.maxmemory) return 0;
+    if (mem_used + moremem <= server.maxmemory)
+        return 0;
 
     size_t overhead = freeMemoryGetNotCountedMemory();
     mem_used = (mem_used > overhead) ? mem_used - overhead : 0;
@@ -424,13 +447,14 @@ int overMaxmemoryAfterAlloc(size_t moremem) {
  * eviction cycles until the "maxmemory" condition has resolved or there are no
  * more evictable items.  */
 static int isEvictionProcRunning = 0;
-static int evictionTimeProc(
-        struct aeEventLoop *eventLoop, long long id, void *clientData) {
+static int evictionTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData)
+{
     UNUSED(eventLoop);
     UNUSED(id);
     UNUSED(clientData);
 
-    if (performEvictions() == EVICT_RUNNING) return 0;  /* keep evicting */
+    if (performEvictions() == EVICT_RUNNING)
+        return 0; /* keep evicting */
 
     /* For EVICT_OK - things are good, no need to keep evicting.
      * For EVICT_FAIL - there is nothing left to evict.  */
@@ -438,11 +462,11 @@ static int evictionTimeProc(
     return AE_NOMORE;
 }
 
-void startEvictionTimeProc(void) {
+void startEvictionTimeProc(void)
+{
     if (!isEvictionProcRunning) {
         isEvictionProcRunning = 1;
-        aeCreateTimeEvent(server.el, 0,
-                evictionTimeProc, NULL, NULL);
+        aeCreateTimeEvent(server.el, 0, evictionTimeProc, NULL, NULL);
     }
 }
 
@@ -450,23 +474,28 @@ void startEvictionTimeProc(void) {
  *   Returns 1 if evictions can be performed
  *   Returns 0 if eviction processing should be skipped
  */
-static int isSafeToPerformEvictions(void) {
+static int isSafeToPerformEvictions(void)
+{
     /* - There must be no script in timeout condition.
      * - Nor we are loading data right now.  */
-    if (isInsideYieldingLongCommand() || server.loading) return 0;
+    if (isInsideYieldingLongCommand() || server.loading)
+        return 0;
 
     /* By default replicas should ignore maxmemory
      * and just be masters exact copies. */
-    if (server.masterhost && server.repl_slave_ignore_maxmemory) return 0;
+    if (server.masterhost && server.repl_slave_ignore_maxmemory)
+        return 0;
 
     /* If 'evict' action is paused, for whatever reason, then return false */
-    if (isPausedActionsWithUpdate(PAUSE_ACTION_EVICT)) return 0;
+    if (isPausedActionsWithUpdate(PAUSE_ACTION_EVICT))
+        return 0;
 
     return 1;
 }
 
 /* Algorithm for converting tenacity (0-100) to a time limit.  */
-static unsigned long evictionTimeLimitUs(void) {
+static unsigned long evictionTimeLimitUs(void)
+{
     serverAssert(server.maxmemory_eviction_tenacity >= 0);
     serverAssert(server.maxmemory_eviction_tenacity <= 100);
 
@@ -480,7 +509,7 @@ static unsigned long evictionTimeLimitUs(void) {
         return (unsigned long)(500.0 * pow(1.15, server.maxmemory_eviction_tenacity - 10.0));
     }
 
-    return ULONG_MAX;   /* No limit to eviction time */
+    return ULONG_MAX; /* No limit to eviction time */
 }
 
 /* Check that memory usage is within the current "maxmemory" limit.  If over
@@ -507,10 +536,12 @@ static unsigned long evictionTimeLimitUs(void) {
  *   EVICT_RUNNING  - memory is over the limit, but eviction is still processing
  *   EVICT_FAIL     - memory is over the limit, and there's nothing to evict
  * */
-int performEvictions(void) {
+int performEvictions(void)
+{
     /* Note, we don't goto update_metrics here because this check skips eviction
      * as if it wasn't triggered. it's a fake EVICT_OK. */
-    if (!isSafeToPerformEvictions()) return EVICT_OK;
+    if (!isSafeToPerformEvictions())
+        return EVICT_OK;
 
     int keys_freed = 0;
     size_t mem_reported, mem_tofree;
@@ -519,13 +550,13 @@ int performEvictions(void) {
     int slaves = listLength(server.slaves);
     int result = EVICT_FAIL;
 
-    if (getMaxmemoryState(&mem_reported,NULL,&mem_tofree,NULL) == C_OK) {
+    if (getMaxmemoryState(&mem_reported, NULL, &mem_tofree, NULL) == C_OK) {
         result = EVICT_OK;
         goto update_metrics;
     }
 
     if (server.maxmemory_policy == MAXMEMORY_NO_EVICTION) {
-        result = EVICT_FAIL;  /* We need to free memory, but policy forbids. */
+        result = EVICT_FAIL; /* We need to free memory, but policy forbids. */
         goto update_metrics;
     }
 
@@ -550,9 +581,8 @@ int performEvictions(void) {
         redisDb *db;
         dictEntry *de;
 
-        if (server.maxmemory_policy & (MAXMEMORY_FLAG_LRU|MAXMEMORY_FLAG_LFU) ||
-            server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL)
-        {
+        if (server.maxmemory_policy & (MAXMEMORY_FLAG_LRU | MAXMEMORY_FLAG_LFU) ||
+            server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL) {
             struct evictionPoolEntry *pool = EvictionPoolLRU;
             while (bestkey == NULL) {
                 unsigned long total_keys = 0;
@@ -561,7 +591,7 @@ int performEvictions(void) {
                  * so to start populate the eviction pool sampling keys from
                  * every DB. */
                 for (i = 0; i < server.dbnum; i++) {
-                    db = server.db+i;
+                    db = server.db + i;
                     kvstore *kvs;
                     if (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) {
                         kvs = db->keys;
@@ -570,7 +600,8 @@ int performEvictions(void) {
                     }
                     unsigned long sampled_keys = 0;
                     unsigned long current_db_keys = kvstoreSize(kvs);
-                    if (current_db_keys == 0) continue;
+                    if (current_db_keys == 0)
+                        continue;
 
                     total_keys += current_db_keys;
                     int l = kvstoreNumNonEmptyDicts(kvs);
@@ -578,20 +609,22 @@ int performEvictions(void) {
                     while (l--) {
                         sampled_keys += evictionPoolPopulate(db, kvs, pool);
                         /* We have sampled enough keys in the current db, exit the loop. */
-                        if (sampled_keys >= (unsigned long) server.maxmemory_samples)
+                        if (sampled_keys >= (unsigned long)server.maxmemory_samples)
                             break;
                         /* If there are not a lot of keys in the current db, dict/s may be very
                          * sparsely populated, exit the loop without meeting the sampling
                          * requirement. */
-                        if (current_db_keys < (unsigned long) server.maxmemory_samples*10)
+                        if (current_db_keys < (unsigned long)server.maxmemory_samples * 10)
                             break;
                     }
                 }
-                if (!total_keys) break; /* No keys to evict. */
+                if (!total_keys)
+                    break; /* No keys to evict. */
 
                 /* Go backward from best to worst element to evict. */
-                for (k = EVPOOL_SIZE-1; k >= 0; k--) {
-                    if (pool[k].key == NULL) continue;
+                for (k = EVPOOL_SIZE - 1; k >= 0; k--) {
+                    if (pool[k].key == NULL)
+                        continue;
                     bestdbid = pool[k].dbid;
 
                     kvstore *kvs;
@@ -622,14 +655,13 @@ int performEvictions(void) {
 
         /* volatile-random and allkeys-random policy */
         else if (server.maxmemory_policy == MAXMEMORY_ALLKEYS_RANDOM ||
-                 server.maxmemory_policy == MAXMEMORY_VOLATILE_RANDOM)
-        {
+                 server.maxmemory_policy == MAXMEMORY_VOLATILE_RANDOM) {
             /* When evicting a random key, we try to evict a key for
              * each DB, so we use the static 'next_db' variable to
              * incrementally visit all DBs. */
             for (i = 0; i < server.dbnum; i++) {
                 j = (++next_db) % server.dbnum;
-                db = server.db+j;
+                db = server.db + j;
                 kvstore *kvs;
                 if (server.maxmemory_policy == MAXMEMORY_ALLKEYS_RANDOM) {
                     kvs = db->keys;
@@ -650,10 +682,10 @@ int performEvictions(void) {
         /* Finally remove the selected key. */
         if (bestkey) {
             long long key_mem_freed;
-            db = server.db+bestdbid;
+            db = server.db + bestdbid;
 
             enterExecutionUnit(1, 0);
-            robj *keyobj = createStringObject(bestkey,sdslen(bestkey));
+            robj *keyobj = createStringObject(bestkey, sdslen(bestkey));
             deleteEvictedKeyAndPropagate(db, keyobj, &key_mem_freed);
             decrRefCount(keyobj);
             exitExecutionUnit();
@@ -668,7 +700,8 @@ int performEvictions(void) {
                  * start spending so much time here that is impossible to
                  * deliver data to the replicas fast enough, so we force the
                  * transmission here inside the loop. */
-                if (slaves) flushSlavesOutputBuffers();
+                if (slaves)
+                    flushSlavesOutputBuffers();
 
                 /* Normally our stop condition is the ability to release
                  * a fixed, pre-computed amount of memory. However when we
@@ -678,7 +711,7 @@ int performEvictions(void) {
                  * across the dbAsyncDelete() call, while the thread can
                  * release the memory all the time. */
                 if (server.lazyfree_lazy_eviction) {
-                    if (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_OK) {
+                    if (getMaxmemoryState(NULL, NULL, NULL, NULL) == C_OK) {
                         break;
                     }
                 }
@@ -706,20 +739,19 @@ cant_free:
          * short wait here if such jobs exist, but don't wait long.  */
         mstime_t lazyfree_latency;
         latencyStartMonitor(lazyfree_latency);
-        while (bioPendingJobsOfType(BIO_LAZY_FREE) &&
-              elapsedUs(evictionTimer) < eviction_time_limit_us) {
-            if (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_OK) {
+        while (bioPendingJobsOfType(BIO_LAZY_FREE) && elapsedUs(evictionTimer) < eviction_time_limit_us) {
+            if (getMaxmemoryState(NULL, NULL, NULL, NULL) == C_OK) {
                 result = EVICT_OK;
                 break;
             }
             usleep(eviction_time_limit_us < 1000 ? eviction_time_limit_us : 1000);
         }
         latencyEndMonitor(lazyfree_latency);
-        latencyAddSampleIfNeeded("eviction-lazyfree",lazyfree_latency);
+        latencyAddSampleIfNeeded("eviction-lazyfree", lazyfree_latency);
     }
 
     latencyEndMonitor(latency);
-    latencyAddSampleIfNeeded("eviction-cycle",latency);
+    latencyAddSampleIfNeeded("eviction-cycle", latency);
 
 update_metrics:
     if (result == EVICT_RUNNING || result == EVICT_FAIL) {

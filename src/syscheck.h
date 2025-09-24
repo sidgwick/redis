@@ -10,8 +10,8 @@
 #ifndef __SYSCHECK_H
 #define __SYSCHECK_H
 
-#include "sds.h"
 #include "config.h"
+#include "sds.h"
 
 int syscheck(void);
 #ifdef __linux__

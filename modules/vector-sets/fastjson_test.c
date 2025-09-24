@@ -5,32 +5,32 @@
  * memory outside the bounds of the input.
  */
 
+#include <errno.h>
+#include <fcntl.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <signal.h>
-#include <time.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <setjmp.h>
+#include <time.h>
+#include <unistd.h>
 
 /* Page size constant - typically 4096 or 16k bytes (Apple Silicon).
  * We use 16k so that it will work on both, but not with Linux huge pages. */
-#define PAGE_SIZE 4096*4
-#define MAX_JSON_SIZE (PAGE_SIZE - 128)  /* Keep some margin */
+#define PAGE_SIZE 4096 * 4
+#define MAX_JSON_SIZE (PAGE_SIZE - 128) /* Keep some margin */
 #define MAX_FIELD_SIZE 64
 #define NUM_TEST_ITERATIONS 100000
 #define NUM_CORRUPTION_TESTS 10000
 #define NUM_BOUNDARY_TESTS 10000
 
 /* Test state tracking */
-static char *safe_page = NULL;       /* Start of readable/writable page */
-static char *unsafe_page = NULL;     /* Start of inaccessible guard page */
-static int boundary_violation = 0;   /* Flag for boundary violations */
-static jmp_buf jmpbuf;               /* For signal handling */
+static char *safe_page = NULL;     /* Start of readable/writable page */
+static char *unsafe_page = NULL;   /* Start of inaccessible guard page */
+static int boundary_violation = 0; /* Flag for boundary violations */
+static jmp_buf jmpbuf;             /* For signal handling */
 static int tests_passed = 0;
 static int tests_failed = 0;
 static int corruptions_passed = 0;
@@ -56,15 +56,16 @@ void run_boundary_tests(void);
 void print_test_summary(void);
 
 /* Signal handler for segmentation violations */
-static void sigsegv_handler(int sig) {
+static void sigsegv_handler(int sig)
+{
     boundary_violation = 1;
     printf("Boundary violation detected! Caught signal %d\n", sig);
     longjmp(jmpbuf, 1);
 }
 
 /* Wrapper for jsonExtractField to check for boundary violations */
-exprtoken *safe_extract_field(const char *json, size_t json_len,
-                             const char *field, size_t field_len) {
+exprtoken *safe_extract_field(const char *json, size_t json_len, const char *field, size_t field_len)
+{
     boundary_violation = 0;
 
     if (setjmp(jmpbuf) == 0) {
@@ -75,21 +76,19 @@ exprtoken *safe_extract_field(const char *json, size_t json_len,
 }
 
 /* Setup two adjacent memory pages - one readable/writable, one inaccessible */
-void setup_test_memory(void) {
+void setup_test_memory(void)
+{
     /* Request a page of memory, with specific alignment. We rely on the
      * fact that hopefully the page after that will cause a segfault if
      * accessed. */
-    void *region = mmap(NULL, PAGE_SIZE,
-                       PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS,
-                       -1, 0);
+    void *region = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     if (region == MAP_FAILED) {
         perror("mmap failed");
         exit(EXIT_FAILURE);
     }
 
-    safe_page = (char*)region;
+    safe_page = (char *)region;
     unsafe_page = safe_page + PAGE_SIZE;
     // Uncomment to make sure it crashes :D
     // printf("%d\n", unsafe_page[5]);
@@ -104,7 +103,8 @@ void setup_test_memory(void) {
     sigaction(SIGBUS, &sa, NULL);
 }
 
-void cleanup_test_memory(void) {
+void cleanup_test_memory(void)
+{
     if (safe_page != NULL) {
         munmap(safe_page, PAGE_SIZE);
         safe_page = NULL;
@@ -113,7 +113,8 @@ void cleanup_test_memory(void) {
 }
 
 /* Generate random strings with proper escaping for JSON */
-void generate_random_string(char *buffer, size_t max_len) {
+void generate_random_string(char *buffer, size_t max_len)
+{
     static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     size_t len = 1 + rand() % (max_len - 2); /* Ensure at least 1 char */
 
@@ -124,24 +125,29 @@ void generate_random_string(char *buffer, size_t max_len) {
 }
 
 /* Generate random numbers as strings */
-void generate_random_number(char *buffer, size_t max_len) {
+void generate_random_number(char *buffer, size_t max_len)
+{
     double num = (double)rand() / RAND_MAX * 1000.0;
 
     /* Occasionally make it negative or add decimal places */
-    if (rand() % 5 == 0) num = -num;
-    if (rand() % 3 != 0) num += (double)(rand() % 100) / 100.0;
+    if (rand() % 5 == 0)
+        num = -num;
+    if (rand() % 3 != 0)
+        num += (double)(rand() % 100) / 100.0;
 
     snprintf(buffer, max_len, "%.6g", num);
 }
 
 /* Generate a random field name */
-void generate_random_field(char *field, size_t *field_len) {
+void generate_random_field(char *field, size_t *field_len)
+{
     generate_random_string(field, MAX_FIELD_SIZE / 2);
     *field_len = strlen(field);
 }
 
 /* Generate a random JSON object with fields */
-char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has_field) {
+char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has_field)
+{
     char *json = malloc(MAX_JSON_SIZE);
     if (json == NULL) {
         perror("malloc");
@@ -150,7 +156,7 @@ char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has
 
     char buffer[MAX_JSON_SIZE / 4]; /* Buffer for generating values */
     int pos = 0;
-    int num_fields = 1 + rand() % 10; /* Random number of fields */
+    int num_fields = 1 + rand() % 10;             /* Random number of fields */
     int target_field_index = rand() % num_fields; /* Which field to return */
 
     /* Start the JSON object */
@@ -172,7 +178,7 @@ char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has
             /* Sometimes change the last char so that it will not match. */
             if (rand() % 2) {
                 *has_field = 0;
-                field[*field_len-1] = '!';
+                field[*field_len - 1] = '!';
             }
         } else {
             generate_random_string(buffer, MAX_FIELD_SIZE / 4);
@@ -182,45 +188,46 @@ char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has
         /* Generate a random value type */
         int value_type = rand() % 5;
         switch (value_type) {
-            case 0: /* String */
-                generate_random_string(buffer, MAX_JSON_SIZE / 8);
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "\"%s\"", buffer);
-                break;
+        case 0: /* String */
+            generate_random_string(buffer, MAX_JSON_SIZE / 8);
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "\"%s\"", buffer);
+            break;
 
-            case 1: /* Number */
-                generate_random_number(buffer, MAX_JSON_SIZE / 8);
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "%s", buffer);
-                break;
+        case 1: /* Number */
+            generate_random_number(buffer, MAX_JSON_SIZE / 8);
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "%s", buffer);
+            break;
 
-            case 2: /* Boolean: true */
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "true");
-                break;
+        case 2: /* Boolean: true */
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "true");
+            break;
 
-            case 3: /* Boolean: false */
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "false");
-                break;
+        case 3: /* Boolean: false */
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "false");
+            break;
 
-            case 4: /* Null */
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "null");
-                break;
+        case 4: /* Null */
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "null");
+            break;
 
-            case 5: /* Array (simple) */
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "[");
-                int array_items = 1 + rand() % 5;
-                for (int j = 0; j < array_items; j++) {
-                    if (j > 0) pos += snprintf(json + pos, MAX_JSON_SIZE - pos, ", ");
+        case 5: /* Array (simple) */
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "[");
+            int array_items = 1 + rand() % 5;
+            for (int j = 0; j < array_items; j++) {
+                if (j > 0)
+                    pos += snprintf(json + pos, MAX_JSON_SIZE - pos, ", ");
 
-                    /* Array items - either number or string */
-                    if (rand() % 2) {
-                        generate_random_number(buffer, MAX_JSON_SIZE / 16);
-                        pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "%s", buffer);
-                    } else {
-                        generate_random_string(buffer, MAX_JSON_SIZE / 16);
-                        pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "\"%s\"", buffer);
-                    }
+                /* Array items - either number or string */
+                if (rand() % 2) {
+                    generate_random_number(buffer, MAX_JSON_SIZE / 16);
+                    pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "%s", buffer);
+                } else {
+                    generate_random_string(buffer, MAX_JSON_SIZE / 16);
+                    pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "\"%s\"", buffer);
                 }
-                pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "]");
-                break;
+            }
+            pos += snprintf(json + pos, MAX_JSON_SIZE - pos, "]");
+            break;
         }
     }
 
@@ -232,8 +239,10 @@ char *generate_random_json(size_t *len, char *field, size_t *field_len, int *has
 }
 
 /* Corrupt JSON by replacing random characters */
-void corrupt_json(char *json, size_t len) {
-    if (len < 2) return;  /* Too short to corrupt safely */
+void corrupt_json(char *json, size_t len)
+{
+    if (len < 2)
+        return; /* Too short to corrupt safely */
 
     /* Corrupt 1-3 characters */
     int num_corruptions = 1 + rand() % 3;
@@ -245,7 +254,8 @@ void corrupt_json(char *json, size_t len) {
 }
 
 /* Run standard parser tests with generated valid JSON */
-void run_normal_tests(void) {
+void run_normal_tests(void)
+{
     printf("Running normal JSON extraction tests...\n");
 
     for (int i = 0; i < NUM_TEST_ITERATIONS; i++) {
@@ -286,7 +296,8 @@ void run_normal_tests(void) {
 }
 
 /* Run tests with corrupted JSON */
-void run_corruption_tests(void) {
+void run_corruption_tests(void)
+{
     printf("Running JSON corruption tests...\n");
 
     for (int i = 0; i < NUM_CORRUPTION_TESTS; i++) {
@@ -329,7 +340,8 @@ void run_corruption_tests(void) {
 }
 
 /* Run tests at memory boundaries */
-void run_boundary_tests(void) {
+void run_boundary_tests(void)
+{
     printf("Running memory boundary tests...\n");
 
     for (int i = 0; i < NUM_BOUNDARY_TESTS; i++) {
@@ -350,8 +362,8 @@ void run_boundary_tests(void) {
 
         /* Test parsing with non-existent field (forcing it to scan to end) */
         char nonexistent_field[MAX_FIELD_SIZE] = "nonexistent_field";
-        exprtoken *token = safe_extract_field(safe_page + offset, truncated_len,
-                                             nonexistent_field, strlen(nonexistent_field));
+        exprtoken *token =
+            safe_extract_field(safe_page + offset, truncated_len, nonexistent_field, strlen(nonexistent_field));
 
         /* We're just testing that it doesn't access memory beyond the boundary */
         if (boundary_violation) {
@@ -369,7 +381,8 @@ void run_boundary_tests(void) {
 }
 
 /* Print summary of test results */
-void print_test_summary(void) {
+void print_test_summary(void)
+{
     printf("\n===== FASTJSON PARSER TEST SUMMARY =====\n");
     printf("Normal tests passed: %d/%d\n", tests_passed, NUM_TEST_ITERATIONS * 2);
     printf("Corruption tests passed: %d/%d\n", corruptions_passed, NUM_CORRUPTION_TESTS);
@@ -384,7 +397,8 @@ void print_test_summary(void) {
 }
 
 /* Entry point for fastjson parser test */
-void run_fastjson_test(void) {
+void run_fastjson_test(void)
+{
     printf("Starting fastjson parser stress test...\n");
 
     /* Seed the random number generator */

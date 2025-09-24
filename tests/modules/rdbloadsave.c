@@ -1,13 +1,14 @@
 #include "redismodule.h"
 
-#include <stdlib.h>
-#include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <memory.h>
-#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 /* Sanity tests to verify inputs and return values. */
-int sanity(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int sanity(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
@@ -45,12 +46,13 @@ int sanity(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     RedisModule_ReplyWithSimpleString(ctx, "OK");
 
- out:
+out:
     RedisModule_RdbStreamFree(s);
     return REDISMODULE_OK;
 }
 
-int cmd_rdbsave(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int cmd_rdbsave(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -78,7 +80,8 @@ out:
 }
 
 /* Fork before calling RM_RdbSave(). */
-int cmd_rdbsave_fork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int cmd_rdbsave_fork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -113,7 +116,8 @@ int cmd_rdbsave_fork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int cmd_rdbload(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int cmd_rdbload(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -139,7 +143,8 @@ int cmd_rdbload(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 

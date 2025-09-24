@@ -10,9 +10,9 @@
 
 #include "eventnotifier.h"
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <fcntl.h>
 #ifdef HAVE_EVENT_FD
 #include <sys/eventfd.h>
 #endif
@@ -20,16 +20,18 @@
 #include "anet.h"
 #include "zmalloc.h"
 
-eventNotifier* createEventNotifier(void) {
+eventNotifier *createEventNotifier(void)
+{
     eventNotifier *en = zmalloc(sizeof(eventNotifier));
-    if (!en) return NULL;
+    if (!en)
+        return NULL;
 
 #ifdef HAVE_EVENT_FD
-    if ((en->efd = eventfd(0, EFD_NONBLOCK| EFD_CLOEXEC)) != -1) {
+    if ((en->efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)) != -1) {
         return en;
     }
 #else
-    if (anetPipe(en->pipefd, O_CLOEXEC|O_NONBLOCK, O_CLOEXEC|O_NONBLOCK) != -1) {
+    if (anetPipe(en->pipefd, O_CLOEXEC | O_NONBLOCK, O_CLOEXEC | O_NONBLOCK) != -1) {
         return en;
     }
 #endif
@@ -39,7 +41,8 @@ eventNotifier* createEventNotifier(void) {
     return NULL;
 }
 
-int getReadEventFd(struct eventNotifier *en) {
+int getReadEventFd(struct eventNotifier *en)
+{
 #ifdef HAVE_EVENT_FD
     return en->efd;
 #else
@@ -47,7 +50,8 @@ int getReadEventFd(struct eventNotifier *en) {
 #endif
 }
 
-int getWriteEventFd(struct eventNotifier *en) {
+int getWriteEventFd(struct eventNotifier *en)
+{
 #ifdef HAVE_EVENT_FD
     return en->efd;
 #else
@@ -55,7 +59,8 @@ int getWriteEventFd(struct eventNotifier *en) {
 #endif
 }
 
-int triggerEventNotifier(struct eventNotifier *en) {
+int triggerEventNotifier(struct eventNotifier *en)
+{
 #ifdef HAVE_EVENT_FD
     uint64_t u = 1;
     if (write(en->efd, &u, sizeof(uint64_t)) == -1) {
@@ -70,7 +75,8 @@ int triggerEventNotifier(struct eventNotifier *en) {
     return EN_OK;
 }
 
-int handleEventNotifier(struct eventNotifier *en) {
+int handleEventNotifier(struct eventNotifier *en)
+{
 #ifdef HAVE_EVENT_FD
     uint64_t u;
     if (read(en->efd, &u, sizeof(uint64_t)) == -1) {
@@ -85,7 +91,8 @@ int handleEventNotifier(struct eventNotifier *en) {
     return EN_OK;
 }
 
-void freeEventNotifier(struct eventNotifier *en) {
+void freeEventNotifier(struct eventNotifier *en)
+{
 #ifdef HAVE_EVENT_FD
     close(en->efd);
 #else

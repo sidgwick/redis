@@ -24,32 +24,37 @@
  * ==========================================================================
  */
 
-#include "server.h"
 #include "connection.h"
+#include "server.h"
 
 static ConnectionType CT_Unix;
 
-static const char *connUnixGetType(connection *conn) {
+static const char *connUnixGetType(connection *conn)
+{
     UNUSED(conn);
 
     return CONN_TYPE_UNIX;
 }
 
-static void connUnixEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask) {
+static void connUnixEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask)
+{
     connectionTypeTcp()->ae_handler(el, fd, clientData, mask);
 }
 
-static int connUnixAddr(connection *conn, char *ip, size_t ip_len, int *port, int remote) {
+static int connUnixAddr(connection *conn, char *ip, size_t ip_len, int *port, int remote)
+{
     return connectionTypeTcp()->addr(conn, ip, ip_len, port, remote);
 }
 
-static int connUnixIsLocal(connection *conn) {
+static int connUnixIsLocal(connection *conn)
+{
     UNUSED(conn);
 
     return 1; /* Unix socket is always local connection */
 }
 
-static int connUnixListen(connListener *listener) {
+static int connUnixListen(connListener *listener)
+{
     int fd;
     mode_t *perm = (mode_t *)listener->priv;
 
@@ -74,7 +79,8 @@ static int connUnixListen(connListener *listener) {
     return C_OK;
 }
 
-static connection *connCreateUnix(struct aeEventLoop *el) {
+static connection *connCreateUnix(struct aeEventLoop *el)
+{
     connection *conn = zcalloc(sizeof(connection));
     conn->type = &CT_Unix;
     conn->fd = -1;
@@ -84,7 +90,8 @@ static connection *connCreateUnix(struct aeEventLoop *el) {
     return conn;
 }
 
-static connection *connCreateAcceptedUnix(struct aeEventLoop *el, int fd, void *priv) {
+static connection *connCreateAcceptedUnix(struct aeEventLoop *el, int fd, void *priv)
+{
     UNUSED(priv);
     connection *conn = connCreateUnix(el);
     conn->fd = fd;
@@ -92,77 +99,90 @@ static connection *connCreateAcceptedUnix(struct aeEventLoop *el, int fd, void *
     return conn;
 }
 
-static void connUnixAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
+static void connUnixAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask)
+{
     int cfd;
     int max = server.max_new_conns_per_cycle;
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
 
-    while(max--) {
+    while (max--) {
         cfd = anetUnixAccept(server.neterr, fd);
         if (cfd == ANET_ERR) {
             if (anetAcceptFailureNeedsRetry(errno))
                 continue;
             if (errno != EWOULDBLOCK)
-                serverLog(LL_WARNING,
-                    "Accepting client connection: %s", server.neterr);
+                serverLog(LL_WARNING, "Accepting client connection: %s", server.neterr);
             return;
         }
-        serverLog(LL_VERBOSE,"Accepted connection to %s", server.unixsocket);
-        acceptCommonHandler(connCreateAcceptedUnix(el, cfd, NULL),CLIENT_UNIX_SOCKET,NULL);
+        serverLog(LL_VERBOSE, "Accepted connection to %s", server.unixsocket);
+        acceptCommonHandler(connCreateAcceptedUnix(el, cfd, NULL), CLIENT_UNIX_SOCKET, NULL);
     }
 }
 
-static void connUnixShutdown(connection *conn) {
+static void connUnixShutdown(connection *conn)
+{
     connectionTypeTcp()->shutdown(conn);
 }
 
-static void connUnixClose(connection *conn) {
+static void connUnixClose(connection *conn)
+{
     connectionTypeTcp()->close(conn);
 }
 
-static int connUnixAccept(connection *conn, ConnectionCallbackFunc accept_handler) {
+static int connUnixAccept(connection *conn, ConnectionCallbackFunc accept_handler)
+{
     return connectionTypeTcp()->accept(conn, accept_handler);
 }
 
-static int connUnixRebindEventLoop(connection *conn, aeEventLoop *el) {
+static int connUnixRebindEventLoop(connection *conn, aeEventLoop *el)
+{
     return connectionTypeTcp()->rebind_event_loop(conn, el);
 }
 
-static int connUnixWrite(connection *conn, const void *data, size_t data_len) {
+static int connUnixWrite(connection *conn, const void *data, size_t data_len)
+{
     return connectionTypeTcp()->write(conn, data, data_len);
 }
 
-static int connUnixWritev(connection *conn, const struct iovec *iov, int iovcnt) {
+static int connUnixWritev(connection *conn, const struct iovec *iov, int iovcnt)
+{
     return connectionTypeTcp()->writev(conn, iov, iovcnt);
 }
 
-static int connUnixRead(connection *conn, void *buf, size_t buf_len) {
+static int connUnixRead(connection *conn, void *buf, size_t buf_len)
+{
     return connectionTypeTcp()->read(conn, buf, buf_len);
 }
 
-static int connUnixSetWriteHandler(connection *conn, ConnectionCallbackFunc func, int barrier) {
+static int connUnixSetWriteHandler(connection *conn, ConnectionCallbackFunc func, int barrier)
+{
     return connectionTypeTcp()->set_write_handler(conn, func, barrier);
 }
 
-static int connUnixSetReadHandler(connection *conn, ConnectionCallbackFunc func) {
+static int connUnixSetReadHandler(connection *conn, ConnectionCallbackFunc func)
+{
     return connectionTypeTcp()->set_read_handler(conn, func);
 }
 
-static const char *connUnixGetLastError(connection *conn) {
+static const char *connUnixGetLastError(connection *conn)
+{
     return strerror(conn->last_errno);
 }
 
-static ssize_t connUnixSyncWrite(connection *conn, char *ptr, ssize_t size, long long timeout) {
+static ssize_t connUnixSyncWrite(connection *conn, char *ptr, ssize_t size, long long timeout)
+{
     return syncWrite(conn->fd, ptr, size, timeout);
 }
 
-static ssize_t connUnixSyncRead(connection *conn, char *ptr, ssize_t size, long long timeout) {
+static ssize_t connUnixSyncRead(connection *conn, char *ptr, ssize_t size, long long timeout)
+{
     return syncRead(conn->fd, ptr, size, timeout);
 }
 
-static ssize_t connUnixSyncReadLine(connection *conn, char *ptr, ssize_t size, long long timeout) {
+static ssize_t connUnixSyncReadLine(connection *conn, char *ptr, ssize_t size, long long timeout)
+{
     return syncReadLine(conn->fd, ptr, size, timeout);
 }
 

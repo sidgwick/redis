@@ -28,48 +28,49 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "fast_float_strtod.h"
 #include "fmacros.h"
 #include "fpconv_dtoa.h"
-#include "fast_float_strtod.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <float.h>
+#include <libgen.h>
 #include <limits.h>
 #include <math.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <float.h>
 #include <stdint.h>
-#include <errno.h>
-#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <libgen.h>
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 
-#include "util.h"
-#include "sha256.h"
 #include "config.h"
+#include "sha256.h"
+#include "util.h"
 
 #define UNUSED(x) ((void)(x))
 
 /* Selectively define static_assert. Attempt to avoid include server.h in this file. */
 #ifndef static_assert
-#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1:-1]
+#define static_assert(expr, lit) extern char __static_assert_failure[(expr) ? 1 : -1]
 #endif
 
 static_assert(UINTPTR_MAX == 0xffffffffffffffff || UINTPTR_MAX == 0xffffffff, "Unsupported pointer size");
 
 /* Glob-style pattern matching. */
-static int stringmatchlen_impl(const char *pattern, int patternLen,
-        const char *string, int stringLen, int nocase, int *skipLongerMatches, int nesting)
+static int stringmatchlen_impl(const char *pattern, int patternLen, const char *string, int stringLen, int nocase,
+                               int *skipLongerMatches, int nesting)
 {
     /* Protection against abusive patterns. */
-    if (nesting > 1000) return 0;
+    if (nesting > 1000)
+        return 0;
 
-    while(patternLen && stringLen) {
-        switch(pattern[0]) {
+    while (patternLen && stringLen) {
+        switch (pattern[0]) {
         case '*':
             while (patternLen && pattern[1] == '*') {
                 pattern++;
@@ -77,9 +78,9 @@ static int stringmatchlen_impl(const char *pattern, int patternLen,
             }
             if (patternLen == 1)
                 return 1; /* match */
-            while(stringLen) {
-                if (stringmatchlen_impl(pattern+1, patternLen-1,
-                            string, stringLen, nocase, skipLongerMatches, nesting+1))
+            while (stringLen) {
+                if (stringmatchlen_impl(pattern + 1, patternLen - 1, string, stringLen, nocase, skipLongerMatches,
+                                        nesting + 1))
                     return 1; /* match */
                 if (*skipLongerMatches)
                     return 0; /* no match */
@@ -103,8 +104,7 @@ static int stringmatchlen_impl(const char *pattern, int patternLen,
             string++;
             stringLen--;
             break;
-        case '[':
-        {
+        case '[': {
             int not, match;
 
             pattern++;
@@ -115,7 +115,7 @@ static int stringmatchlen_impl(const char *pattern, int patternLen,
                 patternLen--;
             }
             match = 0;
-            while(1) {
+            while (1) {
                 if (patternLen >= 2 && pattern[0] == '\\') {
                     pattern++;
                     patternLen--;
@@ -186,7 +186,7 @@ static int stringmatchlen_impl(const char *pattern, int patternLen,
         pattern++;
         patternLen--;
         if (stringLen == 0) {
-            while(patternLen && *pattern == '*') {
+            while (patternLen && *pattern == '*') {
                 pattern++;
                 patternLen--;
             }
@@ -198,17 +198,17 @@ static int stringmatchlen_impl(const char *pattern, int patternLen,
     return 0;
 }
 
-/* 
- * glob-style pattern matching to check if a given pattern fully includes 
- * the prefix of a string. For the match to succeed, the pattern must end with 
+/*
+ * glob-style pattern matching to check if a given pattern fully includes
+ * the prefix of a string. For the match to succeed, the pattern must end with
  * an unescaped '*' character.
- * 
+ *
  * Returns: 1 if the `pattern` fully matches the `prefixStr`. Returns 0 otherwise.
  */
-int prefixmatch(const char *pattern, int patternLen,
-                const char *prefixStr, int prefixStrLen, int nocase) {
+int prefixmatch(const char *pattern, int patternLen, const char *prefixStr, int prefixStrLen, int nocase)
+{
     int skipLongerMatches = 0;
-    
+
     /* Step 1: Verify if the pattern matches the prefix string completely. */
     if (!stringmatchlen_impl(pattern, patternLen, prefixStr, prefixStrLen, nocase, &skipLongerMatches, 0))
         return 0;
@@ -217,7 +217,7 @@ int prefixmatch(const char *pattern, int patternLen,
      * it can match any suffix of the string beyond the prefix. This check
      * remains outside stringmatchlen_impl() to keep its complexity manageable.
      */
-    if (patternLen == 0 || pattern[patternLen - 1] != '*' )
+    if (patternLen == 0 || pattern[patternLen - 1] != '*')
         return 0;
 
     /* Count backward the number of consecutive backslashes preceding the '*'
@@ -235,32 +235,35 @@ int prefixmatch(const char *pattern, int patternLen,
 }
 
 /* Glob-style pattern matching to a string. */
-int stringmatchlen(const char *pattern, int patternLen,
-        const char *string, int stringLen, int nocase) {
+int stringmatchlen(const char *pattern, int patternLen, const char *string, int stringLen, int nocase)
+{
     int skipLongerMatches = 0;
-    return stringmatchlen_impl(pattern,patternLen,string,stringLen,nocase,&skipLongerMatches,0);
+    return stringmatchlen_impl(pattern, patternLen, string, stringLen, nocase, &skipLongerMatches, 0);
 }
 
-int stringmatch(const char *pattern, const char *string, int nocase) {
-    return stringmatchlen(pattern,strlen(pattern),string,strlen(string),nocase);
+int stringmatch(const char *pattern, const char *string, int nocase)
+{
+    return stringmatchlen(pattern, strlen(pattern), string, strlen(string), nocase);
 }
 
 /* Fuzz stringmatchlen() trying to crash it with bad input. */
-int stringmatchlen_fuzz_test(void) {
+int stringmatchlen_fuzz_test(void)
+{
     char str[32];
     char pat[32];
     int cycles = 10000000;
     int total_matches = 0;
-    while(cycles--) {
+    while (cycles--) {
         int strlen = rand() % sizeof(str);
         int patlen = rand() % sizeof(pat);
-        for (int j = 0; j < strlen; j++) str[j] = rand() % 128;
-        for (int j = 0; j < patlen; j++) pat[j] = rand() % 128;
+        for (int j = 0; j < strlen; j++)
+            str[j] = rand() % 128;
+        for (int j = 0; j < patlen; j++)
+            pat[j] = rand() % 128;
         total_matches += stringmatchlen(pat, patlen, str, strlen, 0);
     }
     return total_matches;
 }
-
 
 /* Convert a string representing an amount of memory into the number of
  * bytes, so for instance memtoull("1Gb") will return 1073741824 that is
@@ -269,68 +272,77 @@ int stringmatchlen_fuzz_test(void) {
  * On parsing error, if *err is not NULL, it's set to 1, otherwise it's
  * set to 0. On error the function return value is 0, regardless of the
  * fact 'err' is NULL or not. */
-unsigned long long memtoull(const char *p, int *err) {
+unsigned long long memtoull(const char *p, int *err)
+{
     const char *u;
     char buf[128];
     long mul; /* unit multiplier */
     unsigned long long val;
     unsigned int digits;
 
-    if (err) *err = 0;
+    if (err)
+        *err = 0;
 
     /* Search the first non digit character. */
     u = p;
     if (*u == '-') {
-        if (err) *err = 1;
+        if (err)
+            *err = 1;
         return 0;
     }
-    while(*u && isdigit(*u)) u++;
-    if (*u == '\0' || !strcasecmp(u,"b")) {
+    while (*u && isdigit(*u))
+        u++;
+    if (*u == '\0' || !strcasecmp(u, "b")) {
         mul = 1;
-    } else if (!strcasecmp(u,"k")) {
+    } else if (!strcasecmp(u, "k")) {
         mul = 1000;
-    } else if (!strcasecmp(u,"kb")) {
+    } else if (!strcasecmp(u, "kb")) {
         mul = 1024;
-    } else if (!strcasecmp(u,"m")) {
-        mul = 1000*1000;
-    } else if (!strcasecmp(u,"mb")) {
-        mul = 1024*1024;
-    } else if (!strcasecmp(u,"g")) {
-        mul = 1000L*1000*1000;
-    } else if (!strcasecmp(u,"gb")) {
-        mul = 1024L*1024*1024;
+    } else if (!strcasecmp(u, "m")) {
+        mul = 1000 * 1000;
+    } else if (!strcasecmp(u, "mb")) {
+        mul = 1024 * 1024;
+    } else if (!strcasecmp(u, "g")) {
+        mul = 1000L * 1000 * 1000;
+    } else if (!strcasecmp(u, "gb")) {
+        mul = 1024L * 1024 * 1024;
     } else {
-        if (err) *err = 1;
+        if (err)
+            *err = 1;
         return 0;
     }
 
     /* Copy the digits into a buffer, we'll use strtoll() to convert
      * the digit (without the unit) into a number. */
-    digits = u-p;
+    digits = u - p;
     if (digits >= sizeof(buf)) {
-        if (err) *err = 1;
+        if (err)
+            *err = 1;
         return 0;
     }
-    memcpy(buf,p,digits);
+    memcpy(buf, p, digits);
     buf[digits] = '\0';
 
     char *endptr;
     errno = 0;
-    val = strtoull(buf,&endptr,10);
+    val = strtoull(buf, &endptr, 10);
     if ((val == 0 && errno == EINVAL) || *endptr != '\0') {
-        if (err) *err = 1;
+        if (err)
+            *err = 1;
         return 0;
     }
-    return val*mul;
+    return val * mul;
 }
 
 /* Search a memory buffer for any set of bytes, like strpbrk().
  * Returns pointer to first found char or NULL.
  */
-const char *mempbrk(const char *s, size_t len, const char *chars, size_t charslen) {
+const char *mempbrk(const char *s, size_t len, const char *chars, size_t charslen)
+{
     for (size_t j = 0; j < len; j++) {
         for (size_t n = 0; n < charslen; n++)
-            if (s[j] == chars[n]) return &s[j];
+            if (s[j] == chars[n])
+                return &s[j];
     }
 
     return NULL;
@@ -339,7 +351,8 @@ const char *mempbrk(const char *s, size_t len, const char *chars, size_t charsle
 /* Modify the buffer replacing all occurrences of chars from the 'from'
  * set with the corresponding char in the 'to' set. Always returns s.
  */
-char *memmapchars(char *s, size_t len, const char *from, const char *to, size_t setlen) {
+char *memmapchars(char *s, size_t len, const char *from, const char *to, size_t setlen)
+{
     for (size_t j = 0; j < len; j++) {
         for (size_t i = 0; i < setlen; i++) {
             if (s[j] == from[i]) {
@@ -353,14 +366,19 @@ char *memmapchars(char *s, size_t len, const char *from, const char *to, size_t 
 
 /* Return the number of digits of 'v' when converted to string in radix 10.
  * See ll2string() for more information. */
-uint32_t digits10(uint64_t v) {
-    if (v < 10) return 1;
-    if (v < 100) return 2;
-    if (v < 1000) return 3;
+uint32_t digits10(uint64_t v)
+{
+    if (v < 10)
+        return 1;
+    if (v < 100)
+        return 2;
+    if (v < 1000)
+        return 3;
     if (v < 1000000000000UL) {
         if (v < 100000000UL) {
             if (v < 1000000) {
-                if (v < 10000) return 4;
+                if (v < 10000)
+                    return 4;
                 return 5 + (v >= 100000);
             }
             return 7 + (v >= 10000000UL);
@@ -374,12 +392,12 @@ uint32_t digits10(uint64_t v) {
 }
 
 /* Like digits10() but for signed values. */
-uint32_t sdigits10(int64_t v) {
+uint32_t sdigits10(int64_t v)
+{
     if (v < 0) {
         /* Abs value of LLONG_MIN requires special handling. */
-        uint64_t uv = (v != LLONG_MIN) ?
-                      (uint64_t)-v : ((uint64_t) LLONG_MAX)+1;
-        return digits10(uv)+1; /* +1 for the minus. */
+        uint64_t uv = (v != LLONG_MIN) ? (uint64_t)-v : ((uint64_t)LLONG_MAX) + 1;
+        return digits10(uv) + 1; /* +1 for the minus. */
     } else {
         return digits10(v);
     }
@@ -388,7 +406,8 @@ uint32_t sdigits10(int64_t v) {
 /* Convert a long long into a string. Returns the number of
  * characters needed to represent the number.
  * If the buffer is not big enough to store the string, 0 is returned. */
-int ll2string(char *dst, size_t dstlen, long long svalue) {
+int ll2string(char *dst, size_t dstlen, long long svalue)
+{
     unsigned long long value;
     int negative = 0;
 
@@ -398,7 +417,7 @@ int ll2string(char *dst, size_t dstlen, long long svalue) {
         if (svalue != LLONG_MIN) {
             value = -svalue;
         } else {
-            value = ((unsigned long long) LLONG_MAX)+1;
+            value = ((unsigned long long)LLONG_MAX) + 1;
         }
         if (dstlen < 2)
             goto err;
@@ -412,7 +431,8 @@ int ll2string(char *dst, size_t dstlen, long long svalue) {
 
     /* Converts the unsigned long long value to string*/
     int length = ull2string(dst, dstlen, value);
-    if (length == 0) return 0;
+    if (length == 0)
+        return 0;
     return length + negative;
 
 err:
@@ -430,17 +450,19 @@ err:
  * novel approach but only publicizes an already used technique):
  *
  * https://www.facebook.com/notes/facebook-engineering/three-optimization-tips-for-c/10151361643253920 */
-int ull2string(char *dst, size_t dstlen, unsigned long long value) {
-    static const char digits[201] =
-        "0001020304050607080910111213141516171819"
-        "2021222324252627282930313233343536373839"
-        "4041424344454647484950515253545556575859"
-        "6061626364656667686970717273747576777879"
-        "8081828384858687888990919293949596979899";
+int ull2string(char *dst, size_t dstlen, unsigned long long value)
+{
+    static const char digits[201] = "0001020304050607080910111213141516171819"
+                                    "2021222324252627282930313233343536373839"
+                                    "4041424344454647484950515253545556575859"
+                                    "6061626364656667686970717273747576777879"
+                                    "8081828384858687888990919293949596979899";
 
     /* Check length. */
     uint32_t length = digits10(value);
-    if (length >= dstlen) goto err;;
+    if (length >= dstlen)
+        goto err;
+    ;
 
     /* Null term. */
     uint32_t next = length - 1;
@@ -455,9 +477,9 @@ int ull2string(char *dst, size_t dstlen, unsigned long long value) {
 
     /* Handle last 1-2 digits. */
     if (value < 10) {
-        dst[next] = '0' + (uint32_t) value;
+        dst[next] = '0' + (uint32_t)value;
     } else {
-        int i = (uint32_t) value * 2;
+        int i = (uint32_t)value * 2;
         dst[next] = digits[i + 1];
         dst[next - 1] = digits[i];
     }
@@ -481,7 +503,8 @@ err:
  * Because of its strictness, it is safe to use this function to check if
  * you can convert a string into a long long, and obtain back the string
  * from the number without any loss in the string representation. */
-int string2ll(const char *s, size_t slen, long long *value) {
+int string2ll(const char *s, size_t slen, long long *value)
+{
     const char *p = s;
     size_t plen = 0;
     int negative = 0;
@@ -493,7 +516,8 @@ int string2ll(const char *s, size_t slen, long long *value) {
 
     /* Special case: first and only digit is 0. */
     if (slen == 1 && p[0] == '0') {
-        if (value != NULL) *value = 0;
+        if (value != NULL)
+            *value = 0;
         return 1;
     }
 
@@ -501,7 +525,8 @@ int string2ll(const char *s, size_t slen, long long *value) {
      * was a positive number. Later convert into negative. */
     if (p[0] == '-') {
         negative = 1;
-        p++; plen++;
+        p++;
+        plen++;
 
         /* Abort on only a negative sign. */
         if (plen == slen)
@@ -510,8 +535,9 @@ int string2ll(const char *s, size_t slen, long long *value) {
 
     /* First digit should be 1-9, otherwise the string should just be 0. */
     if (p[0] >= '1' && p[0] <= '9') {
-        v = p[0]-'0';
-        p++; plen++;
+        v = p[0] - '0';
+        p++;
+        plen++;
     } else {
         return 0;
     }
@@ -522,11 +548,12 @@ int string2ll(const char *s, size_t slen, long long *value) {
             return 0;
         v *= 10;
 
-        if (v > (ULLONG_MAX - (p[0]-'0'))) /* Overflow. */
+        if (v > (ULLONG_MAX - (p[0] - '0'))) /* Overflow. */
             return 0;
-        v += p[0]-'0';
+        v += p[0] - '0';
 
-        p++; plen++;
+        p++;
+        plen++;
     }
 
     /* Return if not all bytes were used. */
@@ -536,13 +563,15 @@ int string2ll(const char *s, size_t slen, long long *value) {
     /* Convert to negative if needed, and do the final overflow check when
      * converting from unsigned long long to long long. */
     if (negative) {
-        if (v > ((unsigned long long)(-(LLONG_MIN+1))+1)) /* Overflow. */
+        if (v > ((unsigned long long)(-(LLONG_MIN + 1)) + 1)) /* Overflow. */
             return 0;
-        if (value != NULL) *value = -v;
+        if (value != NULL)
+            *value = -v;
     } else {
         if (v > LLONG_MAX) /* Overflow. */
             return 0;
-        if (value != NULL) *value = v;
+        if (value != NULL)
+            *value = v;
     }
     return 1;
 }
@@ -552,28 +581,31 @@ int string2ll(const char *s, size_t slen, long long *value) {
  * Redis: if it fails, strtoull() is used instead. The function returns
  * 1 if the conversion happened successfully or 0 if the number is
  * invalid or out of range. */
-int string2ull(const char *s, unsigned long long *value) {
+int string2ull(const char *s, unsigned long long *value)
+{
     long long ll;
-    if (string2ll(s,strlen(s),&ll)) {
-        if (ll < 0) return 0; /* Negative values are out of range. */
+    if (string2ll(s, strlen(s), &ll)) {
+        if (ll < 0)
+            return 0; /* Negative values are out of range. */
         *value = ll;
         return 1;
     }
     errno = 0;
     char *endptr = NULL;
-    *value = strtoull(s,&endptr,10);
+    *value = strtoull(s, &endptr, 10);
     if (errno == EINVAL || errno == ERANGE || !(*s != '\0' && *endptr == '\0'))
         return 0; /* strtoull() failed. */
-    return 1; /* Conversion done! */
+    return 1;     /* Conversion done! */
 }
 
 /* Convert a string into a long. Returns 1 if the string could be parsed into a
  * (non-overflowing) long, 0 otherwise. The value will be set to the parsed
  * value when appropriate. */
-int string2l(const char *s, size_t slen, long *lval) {
+int string2l(const char *s, size_t slen, long *lval)
+{
     long long llval;
 
-    if (!string2ll(s,slen,&llval))
+    if (!string2ll(s, slen, &llval))
         return 0;
 
     if (llval < LONG_MIN || llval > LONG_MAX)
@@ -584,15 +616,21 @@ int string2l(const char *s, size_t slen, long *lval) {
 }
 
 /* return 1 if c>= start && c <= end, 0 otherwise*/
-static int safe_is_c_in_range(char c, char start, char end) {
-    if (c >= start && c <= end) return 1;
+static int safe_is_c_in_range(char c, char start, char end)
+{
+    if (c >= start && c <= end)
+        return 1;
     return 0;
 }
 
-static int base_16_char_type(char c) {
-    if (safe_is_c_in_range(c, '0', '9')) return 0;
-    if (safe_is_c_in_range(c, 'a', 'f')) return 1;
-    if (safe_is_c_in_range(c, 'A', 'F')) return 2;
+static int base_16_char_type(char c)
+{
+    if (safe_is_c_in_range(c, '0', '9'))
+        return 0;
+    if (safe_is_c_in_range(c, 'a', 'f'))
+        return 1;
+    if (safe_is_c_in_range(c, 'A', 'F'))
+        return 2;
     return -1;
 }
 
@@ -600,17 +638,17 @@ static int base_16_char_type(char c) {
  * The function translates @param src until it reaches a value that is not 0-9, a-f or A-F, or @param we read slen characters.
  * On successes writes the result to @param result_output and returns 1.
  * if the string represents an overflow value, return -1. */
-int string2ul_base16_async_signal_safe(const char *src, size_t slen, unsigned long *result_output) {
+int string2ul_base16_async_signal_safe(const char *src, size_t slen, unsigned long *result_output)
+{
     static char ascii_to_dec[] = {'0', 'a' - 10, 'A' - 10};
 
     int char_type = 0;
     size_t curr_char_idx = 0;
     unsigned long result = 0;
     int base = 16;
-    while ((-1 != (char_type = base_16_char_type(src[curr_char_idx]))) &&
-            curr_char_idx < slen) {
+    while ((-1 != (char_type = base_16_char_type(src[curr_char_idx]))) && curr_char_idx < slen) {
         unsigned long curr_val = src[curr_char_idx] - ascii_to_dec[char_type];
-        if ((result > ULONG_MAX / base) || (result > (ULONG_MAX - curr_val)/base)) /* Overflow. */
+        if ((result > ULONG_MAX / base) || (result > (ULONG_MAX - curr_val) / base)) /* Overflow. */
             return -1;
         result = result * base + curr_val;
         ++curr_char_idx;
@@ -627,26 +665,26 @@ int string2ul_base16_async_signal_safe(const char *src, size_t slen, unsigned lo
  * Note that this function demands that the string strictly represents
  * a double: no spaces or other characters before or after the string
  * representing the number are accepted. */
-int string2ld(const char *s, size_t slen, long double *dp) {
+int string2ld(const char *s, size_t slen, long double *dp)
+{
     char buf[MAX_LONG_DOUBLE_CHARS];
     long double value;
     char *eptr;
 
-    if (slen == 0 || slen >= sizeof(buf)) return 0;
-    memcpy(buf,s,slen);
+    if (slen == 0 || slen >= sizeof(buf))
+        return 0;
+    memcpy(buf, s, slen);
     buf[slen] = '\0';
 
     errno = 0;
     value = strtold(buf, &eptr);
-    if (isspace(buf[0]) || eptr[0] != '\0' ||
-        (size_t)(eptr-buf) != slen ||
-        (errno == ERANGE &&
-            (value == HUGE_VAL || value == -HUGE_VAL || fpclassify(value) == FP_ZERO)) ||
-        errno == EINVAL ||
-        isnan(value))
+    if (isspace(buf[0]) || eptr[0] != '\0' || (size_t)(eptr - buf) != slen ||
+        (errno == ERANGE && (value == HUGE_VAL || value == -HUGE_VAL || fpclassify(value) == FP_ZERO)) ||
+        errno == EINVAL || isnan(value))
         return 0;
 
-    if (dp) *dp = value;
+    if (dp)
+        *dp = value;
     return 1;
 }
 
@@ -657,32 +695,33 @@ int string2ld(const char *s, size_t slen, long double *dp) {
  * Note that this function demands that the string strictly represents
  * a double: no spaces or other characters before or after the string
  * representing the number are accepted. */
-int string2d(const char *s, size_t slen, double *dp) {
+int string2d(const char *s, size_t slen, double *dp)
+{
     errno = 0;
     char *eptr;
     /* Fast path to reject empty strings, or strings starting by space explicitly */
-    if (unlikely(slen == 0 ||
-        isspace(((const char*)s)[0])))
+    if (unlikely(slen == 0 || isspace(((const char *)s)[0])))
         return 0;
     *dp = fast_float_strtod(s, &eptr);
     /* If `fast_float_strtod` didn't consume full input, try `strtod`
      * Given fast_float does not support hexadecimal strings representation */
-    if (unlikely((size_t)(eptr - (char*)s) != slen)) {
+    if (unlikely((size_t)(eptr - (char *)s) != slen)) {
         char *fallback_eptr;
         *dp = strtod(s, &fallback_eptr);
-        if ((size_t)(fallback_eptr - (char*)s) != slen) return 0;
+        if ((size_t)(fallback_eptr - (char *)s) != slen)
+            return 0;
     }
     if (unlikely(errno == EINVAL ||
-        (errno == ERANGE &&
-            (*dp == HUGE_VAL || *dp == -HUGE_VAL || fpclassify(*dp) == FP_ZERO)) ||
-        isnan(*dp)))
+                 (errno == ERANGE && (*dp == HUGE_VAL || *dp == -HUGE_VAL || fpclassify(*dp) == FP_ZERO)) ||
+                 isnan(*dp)))
         return 0;
     return 1;
 }
 
 /* Returns 1 if the double value can safely be represented in long long without
  * precision loss, in which case the corresponding long long is stored in the out variable. */
-int double2ll(double d, long long *out) {
+int double2ll(double d, long long *out)
+{
 #if (DBL_MANT_DIG >= 52) && (DBL_MANT_DIG <= 63) && (LLONG_MAX == 0x7fffffffffffffffLL)
     /* Check if the float is in a safe range to be casted into a
      * long long. We are assuming that long long is 64 bit here.
@@ -699,7 +738,7 @@ int double2ll(double d, long long *out) {
      * i.e. all double values in that range are representable as a long without precision loss,
      * but not all long values in that range can be represented as a double.
      * we only care about the first part here. */
-    if (d < (double)(-LLONG_MAX/2) || d > (double)(LLONG_MAX/2))
+    if (d < (double)(-LLONG_MAX / 2) || d > (double)(LLONG_MAX / 2))
         return 0;
     long long ll = d;
     if (ll == d) {
@@ -715,30 +754,31 @@ int double2ll(double d, long long *out) {
  * This function does not support human-friendly formatting like ld2string
  * does. It is intended mainly to be used inside t_zset.c when writing scores
  * into a listpack representing a sorted set. */
-int d2string(char *buf, size_t len, double value) {
+int d2string(char *buf, size_t len, double value)
+{
     if (isnan(value)) {
         /* Libc in some systems will format nan in a different way,
          * like nan, -nan, NAN, nan(char-sequence).
          * So we normalize it and create a single nan form in an explicit way. */
-        len = snprintf(buf,len,"nan");
+        len = snprintf(buf, len, "nan");
     } else if (isinf(value)) {
         /* Libc in odd systems (Hi Solaris!) will format infinite in a
          * different way, so better to handle it in an explicit way. */
         if (value < 0)
-            len = snprintf(buf,len,"-inf");
+            len = snprintf(buf, len, "-inf");
         else
-            len = snprintf(buf,len,"inf");
+            len = snprintf(buf, len, "inf");
     } else if (value == 0) {
         /* See: http://en.wikipedia.org/wiki/Signed_zero, "Comparisons". */
-        if (1.0/value < 0)
-            len = snprintf(buf,len,"-0");
+        if (1.0 / value < 0)
+            len = snprintf(buf, len, "-0");
         else
-            len = snprintf(buf,len,"0");
+            len = snprintf(buf, len, "0");
     } else {
         long long lvalue;
         /* Integer printing function is much faster, check if we can safely use it. */
         if (double2ll(value, &lvalue))
-            len = ll2string(buf,len,lvalue);
+            len = ll2string(buf, len, lvalue);
         else {
             len = fpconv_dtoa(value, buf);
             buf[len] = '\0';
@@ -768,24 +808,39 @@ int d2string(char *buf, size_t len, double value) {
  * Returns the number of characters needed to represent the number.
  * If the buffer is not big enough to store the string, 0 is returned.
  */
-int fixedpoint_d2string(char *dst, size_t dstlen, double dvalue, int fractional_digits) {
+int fixedpoint_d2string(char *dst, size_t dstlen, double dvalue, int fractional_digits)
+{
     if (fractional_digits < 1 || fractional_digits > 17)
         goto err;
     /* min size of 2 ( due to 0. ) + n fractional_digitits + \0 */
-    if ((int)dstlen < (fractional_digits+3))
+    if ((int)dstlen < (fractional_digits + 3))
         goto err;
     if (dvalue == 0) {
         dst[0] = '0';
         dst[1] = '.';
         memset(dst + 2, '0', fractional_digits);
-        dst[fractional_digits+2] = '\0';
+        dst[fractional_digits + 2] = '\0';
         return fractional_digits + 2;
     }
     /* scale and round */
-    static double powers_of_ten[] = {1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0,
-    10000000.0, 100000000.0, 1000000000.0, 10000000000.0, 100000000000.0, 1000000000000.0,
-    10000000000000.0, 100000000000000.0, 1000000000000000.0, 10000000000000000.0,
-    100000000000000000.0 };
+    static double powers_of_ten[] = {1.0,
+                                     10.0,
+                                     100.0,
+                                     1000.0,
+                                     10000.0,
+                                     100000.0,
+                                     1000000.0,
+                                     10000000.0,
+                                     100000000.0,
+                                     1000000000.0,
+                                     10000000000.0,
+                                     100000000000.0,
+                                     1000000000000.0,
+                                     10000000000000.0,
+                                     100000000000000.0,
+                                     1000000000000000.0,
+                                     10000000000000000.0,
+                                     100000000000000000.0};
     long long svalue = llrint(dvalue * powers_of_ten[fractional_digits]);
     unsigned long long value;
     /* write sign */
@@ -794,7 +849,7 @@ int fixedpoint_d2string(char *dst, size_t dstlen, double dvalue, int fractional_
         if (svalue != LLONG_MIN) {
             value = -svalue;
         } else {
-            value = ((unsigned long long) LLONG_MAX)+1;
+            value = ((unsigned long long)LLONG_MAX) + 1;
         }
         if (dstlen < 2)
             goto err;
@@ -806,16 +861,16 @@ int fixedpoint_d2string(char *dst, size_t dstlen, double dvalue, int fractional_
         value = svalue;
     }
 
-    static const char digitsd[201] =
-        "0001020304050607080910111213141516171819"
-        "2021222324252627282930313233343536373839"
-        "4041424344454647484950515253545556575859"
-        "6061626364656667686970717273747576777879"
-        "8081828384858687888990919293949596979899";
+    static const char digitsd[201] = "0001020304050607080910111213141516171819"
+                                     "2021222324252627282930313233343536373839"
+                                     "4041424344454647484950515253545556575859"
+                                     "6061626364656667686970717273747576777879"
+                                     "8081828384858687888990919293949596979899";
 
     /* Check length. */
     uint32_t ndigits = digits10(value);
-    if (ndigits >= dstlen) goto err;
+    if (ndigits >= dstlen)
+        goto err;
     int integer_digits = ndigits - fractional_digits;
     /* Fractional only check to avoid representing 0.7750 as .7750.
      * This means we need to increment the length and store 0 as the first character.
@@ -843,9 +898,9 @@ int fixedpoint_d2string(char *dst, size_t dstlen, double dvalue, int fractional_
 
     /* Handle last 1-2 digits. */
     if (value < 10) {
-        dst[next] = '0' + (uint32_t) value;
+        dst[next] = '0' + (uint32_t)value;
     } else {
-        int i = (uint32_t) value * 2;
+        int i = (uint32_t)value * 2;
         dst[next] = digitsd[i + 1];
         dst[next - 1] = digitsd[i];
     }
@@ -860,14 +915,16 @@ err:
 }
 
 /* Trims off trailing zeros from a string representing a double. */
-int trimDoubleString(char *buf, size_t len) {
-    if (strchr(buf,'.') != NULL) {
-        char *p = buf+len-1;
-        while(*p == '0') {
+int trimDoubleString(char *buf, size_t len)
+{
+    if (strchr(buf, '.') != NULL) {
+        char *p = buf + len - 1;
+        while (*p == '0') {
             p--;
             len--;
         }
-        if (*p == '.') len--;
+        if (*p == '.')
+            len--;
     }
     buf[len] = '\0';
     return len;
@@ -882,36 +939,42 @@ int trimDoubleString(char *buf, size_t len) {
  *
  * The function returns the length of the string or zero if there was not
  * enough buffer room to store it. */
-int ld2string(char *buf, size_t len, long double value, ld2string_mode mode) {
+int ld2string(char *buf, size_t len, long double value, ld2string_mode mode)
+{
     size_t l = 0;
 
     if (isinf(value)) {
         /* Libc in odd systems (Hi Solaris!) will format infinite in a
          * different way, so better to handle it in an explicit way. */
-        if (len < 5) goto err; /* No room. 5 is "-inf\0" */
+        if (len < 5)
+            goto err; /* No room. 5 is "-inf\0" */
         if (value > 0) {
-            memcpy(buf,"inf",3);
+            memcpy(buf, "inf", 3);
             l = 3;
         } else {
-            memcpy(buf,"-inf",4);
+            memcpy(buf, "-inf", 4);
             l = 4;
         }
     } else if (isnan(value)) {
         /* Libc in some systems will format nan in a different way,
          * like nan, -nan, NAN, nan(char-sequence).
          * So we normalize it and create a single nan form in an explicit way. */
-        if (len < 4) goto err; /* No room. 4 is "nan\0" */
+        if (len < 4)
+            goto err; /* No room. 4 is "nan\0" */
         memcpy(buf, "nan", 3);
         l = 3;
     } else {
         switch (mode) {
         case LD_STR_AUTO:
-            l = snprintf(buf,len,"%.17Lg",value);
-            if (l+1 > len) goto err;; /* No room. */
+            l = snprintf(buf, len, "%.17Lg", value);
+            if (l + 1 > len)
+                goto err;
+            ; /* No room. */
             break;
         case LD_STR_HEX:
-            l = snprintf(buf,len,"%La",value);
-            if (l+1 > len) goto err; /* No room. */
+            l = snprintf(buf, len, "%La", value);
+            if (l + 1 > len)
+                goto err; /* No room. */
             break;
         case LD_STR_HUMAN:
             /* We use 17 digits precision since with 128 bit floats that precision
@@ -919,23 +982,26 @@ int ld2string(char *buf, size_t len, long double value, ld2string_mode mode) {
              * way that is "non surprising" for the user (that is, most small
              * decimal numbers will be represented in a way that when converted
              * back into a string are exactly the same as what the user typed.) */
-            l = snprintf(buf,len,"%.17Lf",value);
-            if (l+1 > len) goto err; /* No room. */
+            l = snprintf(buf, len, "%.17Lf", value);
+            if (l + 1 > len)
+                goto err; /* No room. */
             /* Now remove trailing zeroes after the '.' */
-            if (strchr(buf,'.') != NULL) {
-                char *p = buf+l-1;
-                while(*p == '0') {
+            if (strchr(buf, '.') != NULL) {
+                char *p = buf + l - 1;
+                while (*p == '0') {
                     p--;
                     l--;
                 }
-                if (*p == '.') l--;
+                if (*p == '.')
+                    l--;
             }
             if (l == 2 && buf[0] == '-' && buf[1] == '0') {
                 buf[0] = '0';
                 l = 1;
             }
             break;
-        default: goto err; /* Invalid mode. */
+        default:
+            goto err; /* Invalid mode. */
         }
     }
     buf[l] = '\0';
@@ -952,65 +1018,68 @@ err:
  * stream. However if /dev/urandom is not available, a weaker seed is used.
  *
  * This function is not thread safe, since the state is global. */
-void getRandomBytes(unsigned char *p, size_t len) {
+void getRandomBytes(unsigned char *p, size_t len)
+{
     /* Global state. */
     static int seed_initialized = 0;
     static unsigned char seed[64]; /* 512 bit internal block size. */
-    static uint64_t counter = 0; /* The counter we hash with the seed. */
+    static uint64_t counter = 0;   /* The counter we hash with the seed. */
 
     if (!seed_initialized) {
         /* Initialize a seed and use SHA1 in counter mode, where we hash
          * the same seed with a progressive counter. For the goals of this
          * function we just need non-colliding strings, there are no
          * cryptographic security needs. */
-        FILE *fp = fopen("/dev/urandom","r");
-        if (fp == NULL || fread(seed,sizeof(seed),1,fp) != 1) {
+        FILE *fp = fopen("/dev/urandom", "r");
+        if (fp == NULL || fread(seed, sizeof(seed), 1, fp) != 1) {
             /* Revert to a weaker seed, and in this case reseed again
              * at every call.*/
             for (unsigned int j = 0; j < sizeof(seed); j++) {
                 struct timeval tv;
-                gettimeofday(&tv,NULL);
+                gettimeofday(&tv, NULL);
                 pid_t pid = getpid();
                 seed[j] = tv.tv_sec ^ tv.tv_usec ^ pid ^ (long)fp;
             }
         } else {
             seed_initialized = 1;
         }
-        if (fp) fclose(fp);
+        if (fp)
+            fclose(fp);
     }
 
-    while(len) {
+    while (len) {
         /* This implements SHA256-HMAC. */
         unsigned char digest[SHA256_BLOCK_SIZE];
         unsigned char kxor[64];
-        unsigned int copylen =
-            len > SHA256_BLOCK_SIZE ? SHA256_BLOCK_SIZE : len;
+        unsigned int copylen = len > SHA256_BLOCK_SIZE ? SHA256_BLOCK_SIZE : len;
 
         /* IKEY: key xored with 0x36. */
-        memcpy(kxor,seed,sizeof(kxor));
-        for (unsigned int i = 0; i < sizeof(kxor); i++) kxor[i] ^= 0x36;
+        memcpy(kxor, seed, sizeof(kxor));
+        for (unsigned int i = 0; i < sizeof(kxor); i++)
+            kxor[i] ^= 0x36;
 
         /* Obtain HASH(IKEY||MESSAGE). */
         SHA256_CTX ctx;
         sha256_init(&ctx);
-        sha256_update(&ctx,kxor,sizeof(kxor));
-        sha256_update(&ctx,(unsigned char*)&counter,sizeof(counter));
-        sha256_final(&ctx,digest);
+        sha256_update(&ctx, kxor, sizeof(kxor));
+        sha256_update(&ctx, (unsigned char *)&counter, sizeof(counter));
+        sha256_final(&ctx, digest);
 
         /* OKEY: key xored with 0x5c. */
-        memcpy(kxor,seed,sizeof(kxor));
-        for (unsigned int i = 0; i < sizeof(kxor); i++) kxor[i] ^= 0x5C;
+        memcpy(kxor, seed, sizeof(kxor));
+        for (unsigned int i = 0; i < sizeof(kxor); i++)
+            kxor[i] ^= 0x5C;
 
         /* Obtain HASH(OKEY || HASH(IKEY||MESSAGE)). */
         sha256_init(&ctx);
-        sha256_update(&ctx,kxor,sizeof(kxor));
-        sha256_update(&ctx,digest,SHA256_BLOCK_SIZE);
-        sha256_final(&ctx,digest);
+        sha256_update(&ctx, kxor, sizeof(kxor));
+        sha256_update(&ctx, digest, SHA256_BLOCK_SIZE);
+        sha256_final(&ctx, digest);
 
         /* Increment the counter for the next iteration. */
         counter++;
 
-        memcpy(p,digest,copylen);
+        memcpy(p, digest, copylen);
         len -= copylen;
         p += copylen;
     }
@@ -1020,12 +1089,14 @@ void getRandomBytes(unsigned char *p, size_t len) {
  * given execution of Redis, so that if you are talking with an instance
  * having run_id == A, and you reconnect and it has run_id == B, you can be
  * sure that it is either a different instance or it was restarted. */
-void getRandomHexChars(char *p, size_t len) {
+void getRandomHexChars(char *p, size_t len)
+{
     char *charset = "0123456789abcdef";
     size_t j;
 
-    getRandomBytes((unsigned char*)p,len);
-    for (j = 0; j < len; j++) p[j] = charset[p[j] & 0x0F];
+    getRandomBytes((unsigned char *)p, len);
+    for (j = 0; j < len; j++)
+        p[j] = charset[p[j] & 0x0F];
 }
 
 /* Given the filename, return the absolute path as an SDS string, or NULL
@@ -1035,22 +1106,24 @@ void getRandomHexChars(char *p, size_t len) {
  * The function does not try to normalize everything, but only the obvious
  * case of one or more "../" appearing at the start of "filename"
  * relative path. */
-sds getAbsolutePath(char *filename) {
+sds getAbsolutePath(char *filename)
+{
     char cwd[1024];
     sds abspath;
     sds relpath = sdsnew(filename);
 
-    relpath = sdstrim(relpath," \r\n\t");
-    if (relpath[0] == '/') return relpath; /* Path is already absolute. */
+    relpath = sdstrim(relpath, " \r\n\t");
+    if (relpath[0] == '/')
+        return relpath; /* Path is already absolute. */
 
     /* If path is relative, join cwd and relative path. */
-    if (getcwd(cwd,sizeof(cwd)) == NULL) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
         sdsfree(relpath);
         return NULL;
     }
     abspath = sdsnew(cwd);
-    if (sdslen(abspath) && abspath[sdslen(abspath)-1] != '/')
-        abspath = sdscat(abspath,"/");
+    if (sdslen(abspath) && abspath[sdslen(abspath) - 1] != '/')
+        abspath = sdscat(abspath, "/");
 
     /* At this point we have the current path always ending with "/", and
      * the trimmed relative path. Try to normalize the obvious case of
@@ -1058,24 +1131,22 @@ sds getAbsolutePath(char *filename) {
      *
      * For every "../" we find in the filename, we remove it and also remove
      * the last element of the cwd, unless the current cwd is "/". */
-    while (sdslen(relpath) >= 3 &&
-           relpath[0] == '.' && relpath[1] == '.' && relpath[2] == '/')
-    {
-        sdsrange(relpath,3,-1);
+    while (sdslen(relpath) >= 3 && relpath[0] == '.' && relpath[1] == '.' && relpath[2] == '/') {
+        sdsrange(relpath, 3, -1);
         if (sdslen(abspath) > 1) {
-            char *p = abspath + sdslen(abspath)-2;
+            char *p = abspath + sdslen(abspath) - 2;
             int trimlen = 1;
 
-            while(*p != '/') {
+            while (*p != '/') {
                 p--;
                 trimlen++;
             }
-            sdsrange(abspath,0,-(trimlen+1));
+            sdsrange(abspath, 0, -(trimlen + 1));
         }
     }
 
     /* Finally glue the two parts together. */
-    abspath = sdscatsds(abspath,relpath);
+    abspath = sdscatsds(abspath, relpath);
     sdsfree(relpath);
     return abspath;
 }
@@ -1084,7 +1155,8 @@ sds getAbsolutePath(char *filename) {
  * Gets the proper timezone in a more portable fashion
  * i.e timezone variables are linux specific.
  */
-long getTimeZone(void) {
+long getTimeZone(void)
+{
 #if defined(__linux__) || defined(__sun)
     return timezone;
 #else
@@ -1100,21 +1172,25 @@ long getTimeZone(void) {
  * relative or absolute path. This function just checks that no / or \
  * character exists inside the specified path, that's enough in the
  * environments where Redis runs. */
-int pathIsBaseName(char *path) {
-    return strchr(path,'/') == NULL && strchr(path,'\\') == NULL;
+int pathIsBaseName(char *path)
+{
+    return strchr(path, '/') == NULL && strchr(path, '\\') == NULL;
 }
 
-int fileExist(char *filename) {
+int fileExist(char *filename)
+{
     struct stat statbuf;
     return stat(filename, &statbuf) == 0 && S_ISREG(statbuf.st_mode);
 }
 
-int dirExists(char *dname) {
+int dirExists(char *dname)
+{
     struct stat statbuf;
     return stat(dname, &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
 }
 
-int dirCreateIfMissing(char *dname) {
+int dirCreateIfMissing(char *dname)
+{
     if (mkdir(dname, 0755) != 0) {
         if (errno != EEXIST) {
             return -1;
@@ -1126,7 +1202,8 @@ int dirCreateIfMissing(char *dname) {
     return 0;
 }
 
-int dirRemove(char *dname) {
+int dirRemove(char *dname)
+{
     DIR *dir;
     struct stat stat_entry;
     struct dirent *entry;
@@ -1137,11 +1214,12 @@ int dirRemove(char *dname) {
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+            continue;
 
         snprintf(full_path, sizeof(full_path), "%s/%s", dname, entry->d_name);
 
-        int fd = open(full_path, O_RDONLY|O_NONBLOCK);
+        int fd = open(full_path, O_RDONLY | O_NONBLOCK);
         if (fd == -1) {
             closedir(dir);
             return -1;
@@ -1177,7 +1255,8 @@ int dirRemove(char *dname) {
     return 0;
 }
 
-sds makePath(char *path, char *filename) {
+sds makePath(char *path, char *filename)
+{
     return sdscatfmt(sdsempty(), "%s/%s", path, filename);
 }
 
@@ -1189,7 +1268,8 @@ sds makePath(char *path, char *filename) {
  * 3. fsync() the temp file
  * 4. rename the temp file to the appropriate name
  * 5. fsync() the containing directory */
-int fsyncFileDir(const char *filename) {
+int fsyncFileDir(const char *filename)
+{
 #ifdef _AIX
     /* AIX is unable to fsync a directory */
     return 0;
@@ -1229,8 +1309,9 @@ int fsyncFileDir(const char *filename) {
     return 0;
 }
 
- /* free OS pages backed by file */
-int reclaimFilePageCache(int fd, size_t offset, size_t length) {
+/* free OS pages backed by file */
+int reclaimFilePageCache(int fd, size_t offset, size_t length)
+{
 #ifdef HAVE_FADVISE
     int ret = posix_fadvise(fd, offset, length, POSIX_FADV_DONTNEED);
     if (ret) {
@@ -1254,7 +1335,8 @@ int reclaimFilePageCache(int fd, size_t offset, size_t length) {
  * On success, the function returns the same dest parameter. If the End-of-File is encountered and no characters have
  * been read, the contents of dest remain unchanged and a null pointer is returned.
  * If an error occurs, a null pointer is returned. */
-char *fgets_async_signal_safe(char *dest, int buff_size, int fd) {
+char *fgets_async_signal_safe(char *dest, int buff_size, int fd)
+{
     for (int i = 0; i < buff_size; i++) {
         /* Read one byte */
         ssize_t bytes_read_count = read(fd, dest + i, 1);
@@ -1272,8 +1354,9 @@ char *fgets_async_signal_safe(char *dest, int buff_size, int fd) {
 
 static const char HEX[] = "0123456789abcdef";
 
-static char *u2string_async_signal_safe(int _base, uint64_t val, char *buf) {
-    uint32_t base = (uint32_t) _base;
+static char *u2string_async_signal_safe(int _base, uint64_t val, char *buf)
+{
+    uint32_t base = (uint32_t)_base;
     *buf-- = 0;
     do {
         *buf-- = HEX[val % base];
@@ -1281,7 +1364,8 @@ static char *u2string_async_signal_safe(int _base, uint64_t val, char *buf) {
     return buf + 1;
 }
 
-static char *i2string_async_signal_safe(int base, int64_t val, char *buf) {
+static char *i2string_async_signal_safe(int base, int64_t val, char *buf)
+{
     char *orig_buf = buf;
     const int32_t is_neg = (val < 0);
     *buf-- = 0;
@@ -1310,22 +1394,54 @@ static char *i2string_async_signal_safe(int base, int64_t val, char *buf) {
         for (ix = 0; ix < 16; ++ix, --buf) {
             /* *INDENT-OFF* */
             switch (*buf) {
-            case '0': *buf = 'f'; break;
-            case '1': *buf = 'e'; break;
-            case '2': *buf = 'd'; break;
-            case '3': *buf = 'c'; break;
-            case '4': *buf = 'b'; break;
-            case '5': *buf = 'a'; break;
-            case '6': *buf = '9'; break;
-            case '7': *buf = '8'; break;
-            case '8': *buf = '7'; break;
-            case '9': *buf = '6'; break;
-            case 'a': *buf = '5'; break;
-            case 'b': *buf = '4'; break;
-            case 'c': *buf = '3'; break;
-            case 'd': *buf = '2'; break;
-            case 'e': *buf = '1'; break;
-            case 'f': *buf = '0'; break;
+            case '0':
+                *buf = 'f';
+                break;
+            case '1':
+                *buf = 'e';
+                break;
+            case '2':
+                *buf = 'd';
+                break;
+            case '3':
+                *buf = 'c';
+                break;
+            case '4':
+                *buf = 'b';
+                break;
+            case '5':
+                *buf = 'a';
+                break;
+            case '6':
+                *buf = '9';
+                break;
+            case '7':
+                *buf = '8';
+                break;
+            case '8':
+                *buf = '7';
+                break;
+            case '9':
+                *buf = '6';
+                break;
+            case 'a':
+                *buf = '5';
+                break;
+            case 'b':
+                *buf = '4';
+                break;
+            case 'c':
+                *buf = '3';
+                break;
+            case 'd':
+                *buf = '2';
+                break;
+            case 'e':
+                *buf = '1';
+                break;
+            case 'f':
+                *buf = '0';
+                break;
             }
             /* *INDENT-ON* */
         }
@@ -1333,7 +1449,8 @@ static char *i2string_async_signal_safe(int base, int64_t val, char *buf) {
     return buf + 1;
 }
 
-static const char *check_longlong_async_signal_safe(const char *fmt, int32_t *have_longlong) {
+static const char *check_longlong_async_signal_safe(const char *fmt, int32_t *have_longlong)
+{
     *have_longlong = 0;
     if (*fmt == 'l') {
         fmt++;
@@ -1347,7 +1464,8 @@ static const char *check_longlong_async_signal_safe(const char *fmt, int32_t *ha
     return fmt;
 }
 
-int vsnprintf_async_signal_safe(char *to, size_t size, const char *format, va_list ap) {
+int vsnprintf_async_signal_safe(char *to, size_t size, const char *format, va_list ap)
+{
     char *start = to;
     char *end = start + size - 1;
     for (; *format; ++format) {
@@ -1368,65 +1486,63 @@ int vsnprintf_async_signal_safe(char *to, size_t size, const char *format, va_li
         case 'i':
         case 'u':
         case 'x':
-        case 'p':
-            {
-                int64_t ival = 0;
-                uint64_t uval = 0;
-                if (*format == 'p')
-                    have_longlong = (sizeof(void *) == sizeof(uint64_t));
-                if (have_longlong) {
-                    if (*format == 'u') {
-                        uval = va_arg(ap, uint64_t);
-                    } else {
-                        ival = va_arg(ap, int64_t);
-                    }
+        case 'p': {
+            int64_t ival = 0;
+            uint64_t uval = 0;
+            if (*format == 'p')
+                have_longlong = (sizeof(void *) == sizeof(uint64_t));
+            if (have_longlong) {
+                if (*format == 'u') {
+                    uval = va_arg(ap, uint64_t);
                 } else {
-                    if (*format == 'u') {
-                        uval = va_arg(ap, uint32_t);
-                    } else {
-                        ival = va_arg(ap, int32_t);
-                    }
+                    ival = va_arg(ap, int64_t);
                 }
-
-                {
-                    char buff[22];
-                    const int base = (*format == 'x' || *format == 'p') ? 16 : 10;
-
-/* *INDENT-OFF* */
-                    char *val_as_str = (*format == 'u') ?
-                        u2string_async_signal_safe(base, uval, &buff[sizeof(buff) - 1]) :
-                        i2string_async_signal_safe(base, ival, &buff[sizeof(buff) - 1]);
-/* *INDENT-ON* */
-
-                    /* Strip off "ffffffff" if we have 'x' format without 'll' */
-                    if (*format == 'x' && !have_longlong && ival < 0) {
-                        val_as_str += 8;
-                    }
-
-                    while (*val_as_str && to < end) {
-                        *to++ = *val_as_str++;
-                    }
-                    continue;
+            } else {
+                if (*format == 'u') {
+                    uval = va_arg(ap, uint32_t);
+                } else {
+                    ival = va_arg(ap, int32_t);
                 }
             }
-        case 's':
+
             {
-                const char *val = va_arg(ap, char *);
-                if (!val) {
-                    val = "(null)";
+                char buff[22];
+                const int base = (*format == 'x' || *format == 'p') ? 16 : 10;
+
+                /* *INDENT-OFF* */
+                char *val_as_str = (*format == 'u') ? u2string_async_signal_safe(base, uval, &buff[sizeof(buff) - 1])
+                                                    : i2string_async_signal_safe(base, ival, &buff[sizeof(buff) - 1]);
+                /* *INDENT-ON* */
+
+                /* Strip off "ffffffff" if we have 'x' format without 'll' */
+                if (*format == 'x' && !have_longlong && ival < 0) {
+                    val_as_str += 8;
                 }
-                while (*val && to < end) {
-                    *to++ = *val++;
+
+                while (*val_as_str && to < end) {
+                    *to++ = *val_as_str++;
                 }
                 continue;
             }
+        }
+        case 's': {
+            const char *val = va_arg(ap, char *);
+            if (!val) {
+                val = "(null)";
+            }
+            while (*val && to < end) {
+                *to++ = *val++;
+            }
+            continue;
+        }
         }
     }
     *to = 0;
     return (int)(to - start);
 }
 
-int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...) {
+int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...)
+{
     int result;
     va_list args;
     va_start(args, fmt);
@@ -1436,125 +1552,128 @@ int snprintf_async_signal_safe(char *to, size_t n, const char *fmt, ...) {
 }
 
 #ifdef REDIS_TEST
+#include "testhelp.h"
 #include <assert.h>
 #include <sys/mman.h>
-#include "testhelp.h"
 
-static void test_string2ll(void) {
+static void test_string2ll(void)
+{
     char buf[32];
     long long v;
 
     /* May not start with +. */
-    redis_strlcpy(buf,"+1",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "+1", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 
     /* Leading space. */
-    redis_strlcpy(buf," 1",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, " 1", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 
     /* Trailing space. */
-    redis_strlcpy(buf,"1 ",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "1 ", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 
     /* May not start with 0. */
-    redis_strlcpy(buf,"01",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "01", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 
-    redis_strlcpy(buf,"-1",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-1", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == -1);
 
-    redis_strlcpy(buf,"0",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "0", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == 0);
 
-    redis_strlcpy(buf,"1",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "1", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == 1);
 
-    redis_strlcpy(buf,"99",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "99", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == 99);
 
-    redis_strlcpy(buf,"-99",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-99", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == -99);
 
-    redis_strlcpy(buf,"-9223372036854775808",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-9223372036854775808", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == LLONG_MIN);
 
-    redis_strlcpy(buf,"-9223372036854775809",sizeof(buf)); /* overflow */
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "-9223372036854775809", sizeof(buf)); /* overflow */
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 
-    redis_strlcpy(buf,"9223372036854775807",sizeof(buf));
-    assert(string2ll(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "9223372036854775807", sizeof(buf));
+    assert(string2ll(buf, strlen(buf), &v) == 1);
     assert(v == LLONG_MAX);
 
-    redis_strlcpy(buf,"9223372036854775808",sizeof(buf)); /* overflow */
-    assert(string2ll(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "9223372036854775808", sizeof(buf)); /* overflow */
+    assert(string2ll(buf, strlen(buf), &v) == 0);
 }
 
-static void test_string2l(void) {
+static void test_string2l(void)
+{
     char buf[32];
     long v;
 
     /* May not start with +. */
-    redis_strlcpy(buf,"+1",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "+1", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 0);
 
     /* May not start with 0. */
-    redis_strlcpy(buf,"01",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "01", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 0);
 
-    redis_strlcpy(buf,"-1",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-1", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == -1);
 
-    redis_strlcpy(buf,"0",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "0", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == 0);
 
-    redis_strlcpy(buf,"1",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "1", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == 1);
 
-    redis_strlcpy(buf,"99",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "99", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == 99);
 
-    redis_strlcpy(buf,"-99",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-99", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == -99);
 
 #if LONG_MAX != LLONG_MAX
-    redis_strlcpy(buf,"-2147483648",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "-2147483648", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == LONG_MIN);
 
-    redis_strlcpy(buf,"-2147483649",sizeof(buf)); /* overflow */
-    assert(string2l(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "-2147483649", sizeof(buf)); /* overflow */
+    assert(string2l(buf, strlen(buf), &v) == 0);
 
-    redis_strlcpy(buf,"2147483647",sizeof(buf));
-    assert(string2l(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "2147483647", sizeof(buf));
+    assert(string2l(buf, strlen(buf), &v) == 1);
     assert(v == LONG_MAX);
 
-    redis_strlcpy(buf,"2147483648",sizeof(buf)); /* overflow */
-    assert(string2l(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf, "2147483648", sizeof(buf)); /* overflow */
+    assert(string2l(buf, strlen(buf), &v) == 0);
 #endif
 }
 
-static void test_string2d(void) {
+static void test_string2d(void)
+{
     char buf[1024];
     double v;
 
     /* Valid hexadecimal value. */
-    redis_strlcpy(buf,"0x0p+0",sizeof(buf));
-    assert(string2d(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "0x0p+0", sizeof(buf));
+    assert(string2d(buf, strlen(buf), &v) == 1);
     assert(v == 0.0);
 
-    redis_strlcpy(buf,"0x1p+0",sizeof(buf));
-    assert(string2d(buf,strlen(buf),&v) == 1);
+    redis_strlcpy(buf, "0x1p+0", sizeof(buf));
+    assert(string2d(buf, strlen(buf), &v) == 1);
     assert(v == 1.0);
 
     /* Valid floating-point numbers */
@@ -1597,11 +1716,17 @@ static void test_string2d(void) {
     assert(string2d(buf, strlen(buf), &v) == 0);
 
     /* overflow. */
-    redis_strlcpy(buf,"23456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789",sizeof(buf));
-    assert(string2d(buf,strlen(buf),&v) == 0);
+    redis_strlcpy(buf,
+                  "234567891234567891234567891234567891234567891234567891234567891234567891234567891234567891"
+                  "234567891234567891234567891234567891234567891234567891234567891234567891234567891234567891"
+                  "234567891234567891234567891234567891234567891234567891234567891234567891234567891234567891"
+                  "23456789123456789123456789123456789123456789123456789",
+                  sizeof(buf));
+    assert(string2d(buf, strlen(buf), &v) == 0);
 }
 
-static void test_ll2string(void) {
+static void test_ll2string(void)
+{
     char buf[32];
     long long v;
     int sz;
@@ -1642,7 +1767,8 @@ static void test_ll2string(void) {
     assert(!strcmp(buf, "9223372036854775807"));
 }
 
-static void test_ld2string(void) {
+static void test_ld2string(void)
+{
     char buf[32];
     long double v;
     int sz;
@@ -1653,7 +1779,8 @@ static void test_ld2string(void) {
     assert(!strcmp(buf, "nan"));
 }
 
-static void test_fixedpoint_d2string(void) {
+static void test_fixedpoint_d2string(void)
+{
     char buf[32];
     double v;
     int sz;
@@ -1665,14 +1792,14 @@ static void test_fixedpoint_d2string(void) {
     assert(sz == 3);
     assert(!strcmp(buf, "0.0"));
     /* set junk in buffer */
-    memset(buf,'A',32);
+    memset(buf, 'A', 32);
     v = 0.0001;
     sz = fixedpoint_d2string(buf, sizeof buf, v, 4);
     assert(sz == 6);
     assert(buf[sz] == '\0');
     assert(!strcmp(buf, "0.0001"));
     /* set junk in buffer */
-    memset(buf,'A',32);
+    memset(buf, 'A', 32);
     v = 6.0642951598391699e-05;
     sz = fixedpoint_d2string(buf, sizeof buf, v, 4);
     assert(sz == 6);
@@ -1689,7 +1816,7 @@ static void test_fixedpoint_d2string(void) {
     sz = fixedpoint_d2string(buf, sizeof buf, v, 4);
     assert(sz == 7);
     assert(!strcmp(buf, "-0.0100"));
-     v = -0.1;
+    v = -0.1;
     sz = fixedpoint_d2string(buf, sizeof buf, v, 1);
     assert(sz == 4);
     assert(!strcmp(buf, "-0.1"));
@@ -1717,7 +1844,8 @@ static void test_fixedpoint_d2string(void) {
 #if defined(__linux__)
 /* Since fadvise and mincore is only supported in specific platforms like
  * Linux, we only verify the fadvise mechanism works in Linux */
-static int cache_exist(int fd) {
+static int cache_exist(int fd)
+{
     unsigned char flag;
     void *m = mmap(NULL, 4096, PROT_READ, MAP_SHARED, fd, 0);
     assert(m);
@@ -1725,12 +1853,13 @@ static int cache_exist(int fd) {
     munmap(m, 4096);
     /* the least significant bit of the byte will be set if the corresponding
      * page is currently resident in memory */
-    return flag&1;
+    return flag & 1;
 }
 
-static void test_reclaimFilePageCache(void) {
+static void test_reclaimFilePageCache(void)
+{
     char *tmpfile = "/tmp/redis-reclaim-cache-test";
-    int fd = open(tmpfile, O_RDWR|O_CREAT, 0644);
+    int fd = open(tmpfile, O_RDWR | O_CREAT, 0644);
     assert(fd >= 0);
 
     /* test write file */
@@ -1752,7 +1881,8 @@ static void test_reclaimFilePageCache(void) {
 }
 #endif
 
-int utilTest(int argc, char **argv, int flags) {
+int utilTest(int argc, char **argv, int flags)
+{
     UNUSED(argc);
     UNUSED(argv);
     UNUSED(flags);

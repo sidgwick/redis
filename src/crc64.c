@@ -1,7 +1,7 @@
 /* Copyright (c) 2014, Matt Stancliff <matt@genges.com>
  * Copyright (c) 2020, Amazon Web Services
  * All rights reserved.
- * 
+ *
  * Copyright (c) 2024-present, Valkey contributors.
  * All rights reserved.
  *
@@ -29,11 +29,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE. */
 
-#include <stdlib.h>
 #include "crc64.h"
 #include "crcspeed.h"
 #include "redisassert.h"
 #include "testhelp.h"
+#include <stdlib.h>
 static uint64_t crc64_table[8][256] = {{0}};
 
 #define POLY UINT64_C(0xad93d23594c935a9)
@@ -72,7 +72,8 @@ static uint64_t crc64_table[8][256] = {{0}};
  * \param data_len     The width of \a data expressed in number of bits.
  * \return             The reflected data.
  *****************************************************************************/
-static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
+static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len)
+{
     /* only ever called for data_len == 64 in this codebase
      *
      * Borrowed from bit twiddling hacks, original in the public domain.
@@ -94,9 +95,9 @@ static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
     /* swap bytes */
     data = ((data >> 8) & 0x00FF00FF00FF00FFULL) | ((data & 0x00FF00FF00FF00FFULL) << 8);
     /* swap 2-byte long pairs */
-    data = ( data >> 16 &     0xFFFF0000FFFFULL) | ((data &     0xFFFF0000FFFFULL) << 16);
+    data = (data >> 16 & 0xFFFF0000FFFFULL) | ((data & 0xFFFF0000FFFFULL) << 16);
     /* swap 4-byte quads */
-    data = ( data >> 32 &         0xFFFFFFFFULL) | ((data &         0xFFFFFFFFULL) << 32);
+    data = (data >> 32 & 0xFFFFFFFFULL) | ((data & 0xFFFFFFFFULL) << 32);
 #endif
     /* adjust for non-64-bit reversals */
     return data >> (64 - data_len);
@@ -110,7 +111,8 @@ static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
  * \param data_len Number of bytes in the \a data buffer.
  * \return         The updated crc value.
  ******************************************************************************/
-uint64_t _crc64(uint_fast64_t crc, const void *in_data, const uint64_t len) {
+uint64_t _crc64(uint_fast64_t crc, const void *in_data, const uint64_t len)
+{
     const uint8_t *data = in_data;
     unsigned long long bit;
 
@@ -138,13 +140,15 @@ uint64_t _crc64(uint_fast64_t crc, const void *in_data, const uint64_t len) {
 /******************** END GENERATED PYCRC FUNCTIONS ********************/
 
 /* Initializes the 16KB lookup tables. */
-void crc64_init(void) {
+void crc64_init(void)
+{
     crcspeed64native_init(_crc64, crc64_table);
 }
 
 /* Compute crc64 */
-uint64_t crc64(uint64_t crc, const unsigned char *s, uint64_t l) {
-    return crcspeed64native(crc64_table, crc, (void *) s, l);
+uint64_t crc64(uint64_t crc, const unsigned char *s, uint64_t l)
+{
+    return crcspeed64native(crc64_table, crc, (void *)s, l);
 }
 
 /* Test main */
@@ -157,50 +161,52 @@ static void bench_combine(char *label, uint64_t size, uint64_t expect, int csv);
 long long _ustime(void);
 
 #include <inttypes.h>
-#include <string.h>
 #include <stdlib.h>
-#include <time.h>
+#include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
-#include "zmalloc.h"
 #include "crccombine.h"
+#include "zmalloc.h"
 
-long long _ustime(void) {
+long long _ustime(void)
+{
     struct timeval tv;
     long long ust;
 
     gettimeofday(&tv, NULL);
-    ust = ((long long)tv.tv_sec)*1000000;
+    ust = ((long long)tv.tv_sec) * 1000000;
     ust += tv.tv_usec;
     return ust;
 }
 
-static int bench_crc64(unsigned char *data, uint64_t size, long long passes, uint64_t check, char *name, int csv) {
+static int bench_crc64(unsigned char *data, uint64_t size, long long passes, uint64_t check, char *name, int csv)
+{
     uint64_t min = size, hash = 0;
     long long original_start = _ustime(), original_end;
-    for (long long i=passes; i > 0; i--) {
+    for (long long i = passes; i > 0; i--) {
         hash = crc64(0, data, size);
     }
     original_end = _ustime();
     min = (original_end - original_start) * 1000 / passes;
     /* approximate nanoseconds without nstime */
     if (csv) {
-        printf("%s,%" PRIu64 ",%" PRIu64 ",%d\n",
-               name, size, (1000 * size) / min, hash == check);
+        printf("%s,%" PRIu64 ",%" PRIu64 ",%d\n", name, size, (1000 * size) / min, hash == check);
     } else {
-        printf("test size=%" PRIu64 " algorithm=%s %" PRIu64 " M/sec matches=%d\n",
-               size, name, (1000 * size) / min, hash == check);
+        printf("test size=%" PRIu64 " algorithm=%s %" PRIu64 " M/sec matches=%d\n", size, name, (1000 * size) / min,
+               hash == check);
     }
     return hash != check;
 }
 
 const uint64_t BENCH_RPOLY = UINT64_C(0x95ac9329ac4bc9b5);
 
-static void bench_combine(char *label, uint64_t size, uint64_t expect, int csv) {
+static void bench_combine(char *label, uint64_t size, uint64_t expect, int csv)
+{
     uint64_t min = size, start = expect, thash = expect ^ (expect >> 17);
     long long original_start = _ustime(), original_end;
-    for (int i=0; i < 1000; i++) {
+    for (int i = 0; i < 1000; i++) {
         crc64_combine(thash, start, size, BENCH_RPOLY, 64);
     }
     original_end = _ustime();
@@ -213,24 +219,26 @@ static void bench_combine(char *label, uint64_t size, uint64_t expect, int csv) 
     }
 }
 
-static void genBenchmarkRandomData(char *data, int count) {
+static void genBenchmarkRandomData(char *data, int count)
+{
     static uint32_t state = 1234;
     int i = 0;
 
     while (count--) {
-        state = (state*1103515245+12345);
-        data[i++] = '0'+((state>>16)&63);
+        state = (state * 1103515245 + 12345);
+        data[i++] = '0' + ((state >> 16) & 63);
     }
 }
 
 #define UNUSED(x) (void)(x)
-int crc64Test(int argc, char *argv[], int flags) {
+int crc64Test(int argc, char *argv[], int flags)
+{
 
     uint64_t crc64_test_size = 0;
     int i, lastarg, csv = 0, loop = 0, combine = 0, testAll = 0;
-    
+
 again:
-    if ((argc>=4) && (!strcmp(argv[3],"custom"))) {        
+    if ((argc >= 4) && (!strcmp(argv[3], "custom"))) {
         for (i = 4; i < argc; i++) {
             lastarg = (i == (argc - 1));
             if (!strcmp(argv[i], "--help")) {
@@ -240,37 +248,35 @@ again:
             } else if (!strcmp(argv[i], "-l")) {
                 loop = 1;
             } else if (!strcmp(argv[i], "--crc")) {
-                if (lastarg) goto invalid;
+                if (lastarg)
+                    goto invalid;
                 crc64_test_size = atoll(argv[++i]);
             } else if (!strcmp(argv[i], "--combine")) {
                 combine = 1;
             } else {
-                invalid:
-                printf("Invalid option \"%s\" or option argument missing\n\n",
-                       argv[i]);
-                usage:
-                printf(
-                        "Usage: crc64 [OPTIONS]\n\n"
-                        " --csv              Output in CSV format\n"
-                        " -l                 Loop. Run the tests forever\n"
-                        " --crc <bytes>      Benchmark crc64 faster options, using a buffer this big, and quit when done.\n"
-                        " --combine          Benchmark crc64 combine value ranges and timings.\n"
-                );
+            invalid:
+                printf("Invalid option \"%s\" or option argument missing\n\n", argv[i]);
+            usage:
+                printf("Usage: crc64 [OPTIONS]\n\n"
+                       " --csv              Output in CSV format\n"
+                       " -l                 Loop. Run the tests forever\n"
+                       " --crc <bytes>      Benchmark crc64 faster options, using a buffer this "
+                       "big, and quit when done.\n"
+                       " --combine          Benchmark crc64 combine value ranges and timings.\n");
                 return 1;
             }
         }
     } else {
-        crc64_test_size = 50000; 
+        crc64_test_size = 50000;
         testAll = 1;
-        if (flags & REDIS_TEST_ACCURATE) crc64_test_size = 5000000;
+        if (flags & REDIS_TEST_ACCURATE)
+            crc64_test_size = 5000000;
     }
-    
+
     if ((crc64_test_size == 0 && combine == 0) || testAll) {
         crc64_init();
-        printf("[calcula]: e9c6d914c4b8d9ca == %016" PRIx64 "\n",
-            (uint64_t)_crc64(0, "123456789", 9));
-        printf("[64speed]: e9c6d914c4b8d9ca == %016" PRIx64 "\n",
-            (uint64_t)crc64(0, (unsigned char*)"123456789", 9));
+        printf("[calcula]: e9c6d914c4b8d9ca == %016" PRIx64 "\n", (uint64_t)_crc64(0, "123456789", 9));
+        printf("[64speed]: e9c6d914c4b8d9ca == %016" PRIx64 "\n", (uint64_t)crc64(0, (unsigned char *)"123456789", 9));
         char li[] = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
                     "do eiusmod tempor incididunt ut labore et dolore magna "
                     "aliqua. Ut enim ad minim veniam, quis nostrud exercitation "
@@ -279,23 +285,22 @@ again:
                     "cillum dolore eu fugiat nulla pariatur. Excepteur sint "
                     "occaecat cupidatat non proident, sunt in culpa qui officia "
                     "deserunt mollit anim id est laborum.";
-        printf("[calcula]: c7794709e69683b3 == %016" PRIx64 "\n",
-            (uint64_t)_crc64(0, li, sizeof(li)));
-        printf("[64speed]: c7794709e69683b3 == %016" PRIx64 "\n",
-            (uint64_t)crc64(0, (unsigned char*)li, sizeof(li)));
-        
-        if (!testAll) return 0;
+        printf("[calcula]: c7794709e69683b3 == %016" PRIx64 "\n", (uint64_t)_crc64(0, li, sizeof(li)));
+        printf("[64speed]: c7794709e69683b3 == %016" PRIx64 "\n", (uint64_t)crc64(0, (unsigned char *)li, sizeof(li)));
+
+        if (!testAll)
+            return 0;
     }
 
     int init_this_loop = 1;
     long long init_start, init_end;
 
     do {
-        unsigned char* data = NULL;
+        unsigned char *data = NULL;
         uint64_t passes = 0;
         if (crc64_test_size) {
             data = zmalloc(crc64_test_size);
-            genBenchmarkRandomData((char*)data, crc64_test_size);
+            genBenchmarkRandomData((char *)data, crc64_test_size);
             /* We want to hash about 1 gig of data in total, looped, to get a good
              * idea of our performance.
              */
@@ -306,22 +311,23 @@ again:
 
         crc64_init();
         /* warm up the cache */
-        set_crc64_cutoffs(crc64_test_size+1, crc64_test_size+1);
+        set_crc64_cutoffs(crc64_test_size + 1, crc64_test_size + 1);
         uint64_t expect = crc64(0, data, crc64_test_size);
 
         if ((!combine || testAll) && crc64_test_size) {
-            if (csv && init_this_loop) printf("algorithm,buffer,performance,crc64_matches\n");
+            if (csv && init_this_loop)
+                printf("algorithm,buffer,performance,crc64_matches\n");
 
             /* get the single-character version for single-byte Redis behavior */
-            set_crc64_cutoffs(0, crc64_test_size+1);
+            set_crc64_cutoffs(0, crc64_test_size + 1);
             assert(!bench_crc64(data, crc64_test_size, passes, expect, "crc_1byte", csv));
 
-            set_crc64_cutoffs(crc64_test_size+1, crc64_test_size+1);
+            set_crc64_cutoffs(crc64_test_size + 1, crc64_test_size + 1);
             /* run with 8-byte "single" path, crcfaster */
             assert(!(bench_crc64(data, crc64_test_size, passes, expect, "crcspeed", csv)));
 
             /* run with dual 8-byte paths */
-            set_crc64_cutoffs(1, crc64_test_size+1);
+            set_crc64_cutoffs(1, crc64_test_size + 1);
             assert(!(bench_crc64(data, crc64_test_size, passes, expect, "crcdual", csv)));
 
             /* run with tri 8-byte paths */
@@ -337,11 +343,7 @@ again:
         if (combine || testAll) {
             if (init_this_loop) {
                 init_start = _ustime();
-                crc64_combine(
-                    UINT64_C(0xdeadbeefdeadbeef),
-                    UINT64_C(0xfeebdaedfeebdaed),
-                    INIT_SIZE,
-                    BENCH_RPOLY, 64);
+                crc64_combine(UINT64_C(0xdeadbeefdeadbeef), UINT64_C(0xfeebdaedfeebdaed), INIT_SIZE, BENCH_RPOLY, 64);
                 init_end = _ustime();
 
                 init_end -= init_start;
@@ -364,7 +366,8 @@ again:
         /* step down by ~1.641 for a range of test sizes */
         crc64_test_size -= (crc64_test_size >> 2) + (crc64_test_size >> 3) + (crc64_test_size >> 6);
     } while (crc64_test_size > 3);
-    if (loop) goto again;
+    if (loop)
+        goto again;
     return 0;
 }
 

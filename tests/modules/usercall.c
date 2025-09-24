@@ -1,12 +1,13 @@
 #include "redismodule.h"
-#include <pthread.h>
 #include <assert.h>
+#include <pthread.h>
 
-#define UNUSED(V) ((void) V)
+#define UNUSED(V) ((void)V)
 
 RedisModuleUser *user = NULL;
 
-int call_without_user(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int call_without_user(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc < 2) {
         return RedisModule_WrongArity(ctx);
     }
@@ -23,7 +24,8 @@ int call_without_user(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int call_with_user_flag(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int call_with_user_flag(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc < 3) {
         return RedisModule_WrongArity(ctx);
     }
@@ -34,10 +36,10 @@ int call_with_user_flag(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     RedisModuleString *flags = RedisModule_CreateStringFromString(ctx, argv[1]);
     RedisModule_StringAppendBuffer(ctx, flags, "Ev", 2);
 
-    const char* flg = RedisModule_StringPtrLen(flags, NULL);
-    const char* cmd = RedisModule_StringPtrLen(argv[2], NULL);
+    const char *flg = RedisModule_StringPtrLen(flags, NULL);
+    const char *cmd = RedisModule_StringPtrLen(argv[2], NULL);
 
-    RedisModuleCallReply* rep = RedisModule_Call(ctx, cmd, flg, argv + 3, (size_t)argc - 3);
+    RedisModuleCallReply *rep = RedisModule_Call(ctx, cmd, flg, argv + 3, (size_t)argc - 3);
     if (!rep) {
         RedisModule_ReplyWithError(ctx, "NULL reply returned");
     } else {
@@ -49,7 +51,8 @@ int call_with_user_flag(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-int add_to_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int add_to_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         return RedisModule_WrongArity(ctx);
     }
@@ -61,7 +64,7 @@ int add_to_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     int ret = RedisModule_SetModuleUserACLString(ctx, user, acl, &error);
     if (ret) {
         size_t len;
-        const char * e = RedisModule_StringPtrLen(error, &len);
+        const char *e = RedisModule_StringPtrLen(error, &len);
         RedisModule_ReplyWithError(ctx, e);
         return REDISMODULE_OK;
     }
@@ -71,7 +74,8 @@ int add_to_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int get_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int get_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
 
     if (argc != 1) {
@@ -89,7 +93,8 @@ int get_acl(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
 
-int reset_user(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int reset_user(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
 
     if (argc != 1) {
@@ -113,7 +118,8 @@ typedef struct {
     RedisModuleBlockedClient *bc;
 } bg_call_data;
 
-void *bg_call_worker(void *arg) {
+void *bg_call_worker(void *arg)
+{
     bg_call_data *bg = arg;
     RedisModuleBlockedClient *bc = bg->bc;
 
@@ -138,7 +144,7 @@ void *bg_call_worker(void *arg) {
     RedisModule_FreeString(NULL, format_redis_str);
 
     /* Free the arguments within GIL to prevent simultaneous freeing in main thread. */
-    for (int i=0; i<bg->argc; i++)
+    for (int i = 0; i < bg->argc; i++)
         RedisModule_FreeString(ctx, bg->argv[i]);
     RedisModule_Free(bg->argv);
     RedisModule_Free(bg);
@@ -171,22 +177,20 @@ int call_with_user_bg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     /* Make sure we're not trying to block a client when we shouldn't */
     int flags = RedisModule_GetContextFlags(ctx);
     int allFlags = RedisModule_GetContextFlagsAll();
-    if ((allFlags & REDISMODULE_CTX_FLAGS_MULTI) &&
-        (flags & REDISMODULE_CTX_FLAGS_MULTI)) {
+    if ((allFlags & REDISMODULE_CTX_FLAGS_MULTI) && (flags & REDISMODULE_CTX_FLAGS_MULTI)) {
         RedisModule_ReplyWithSimpleString(ctx, "Blocked client is not supported inside multi");
         return REDISMODULE_OK;
     }
-    if ((allFlags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING) &&
-        (flags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
+    if ((allFlags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING) && (flags & REDISMODULE_CTX_FLAGS_DENY_BLOCKING)) {
         RedisModule_ReplyWithSimpleString(ctx, "Blocked client is not allowed");
         return REDISMODULE_OK;
     }
 
     /* Make a copy of the arguments and pass them to the thread. */
     bg_call_data *bg = RedisModule_Alloc(sizeof(bg_call_data));
-    bg->argv = RedisModule_Alloc(sizeof(RedisModuleString*)*argc);
+    bg->argv = RedisModule_Alloc(sizeof(RedisModuleString *) * argc);
     bg->argc = argc;
-    for (int i=0; i<argc; i++)
+    for (int i = 0; i < argc; i++)
         bg->argv[i] = RedisModule_HoldString(ctx, argv[i]);
 
     /* Block the client */
@@ -201,29 +205,33 @@ int call_with_user_bg(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"usercall",1,REDISMODULE_APIVER_1)== REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "usercall", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"usercall.call_without_user", call_without_user,"write",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.call_without_user", call_without_user, "write", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"usercall.call_with_user_flag", call_with_user_flag,"write",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.call_with_user_flag", call_with_user_flag, "write", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "usercall.call_with_user_bg", call_with_user_bg, "write", 0, 0, 0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.call_with_user_bg", call_with_user_bg, "write", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "usercall.add_to_acl", add_to_acl, "write",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.add_to_acl", add_to_acl, "write", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"usercall.reset_user", reset_user,"write",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.reset_user", reset_user, "write", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"usercall.get_acl", get_acl,"write",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "usercall.get_acl", get_acl, "write", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;

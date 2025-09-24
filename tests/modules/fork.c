@@ -4,19 +4,20 @@
 #define _DEFAULT_SOURCE
 
 #include "redismodule.h"
-#include <string.h>
 #include <assert.h>
+#include <string.h>
 #include <unistd.h>
 
-#define UNUSED(V) ((void) V)
+#define UNUSED(V) ((void)V)
 
 int child_pid = -1;
 int exitted_with_code = -1;
 
-void done_handler(int exitcode, int bysignal, void *user_data) {
+void done_handler(int exitcode, int bysignal, void *user_data)
+{
     child_pid = -1;
     exitted_with_code = exitcode;
-    assert(user_data==(void*)0xdeadbeef);
+    assert(user_data == (void *)0xdeadbeef);
     UNUSED(bysignal);
 }
 
@@ -29,7 +30,7 @@ int fork_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
         return REDISMODULE_OK;
     }
 
-    if(!RMAPI_FUNC_SUPPORTED(RedisModule_Fork)){
+    if (!RMAPI_FUNC_SUPPORTED(RedisModule_Fork)) {
         RedisModule_ReplyWithError(ctx, "Fork api is not supported in the current redis version");
         return REDISMODULE_OK;
     }
@@ -37,7 +38,7 @@ int fork_create(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     RedisModule_StringToLongLong(argv[1], &code_to_exit_with);
     RedisModule_StringToLongLong(argv[2], &usleep_us);
     exitted_with_code = -1;
-    int fork_child_pid = RedisModule_Fork(done_handler, (void*)0xdeadbeef);
+    int fork_child_pid = RedisModule_Fork(done_handler, (void *)0xdeadbeef);
     if (fork_child_pid < 0) {
         RedisModule_ReplyWithError(ctx, "Fork failed");
         return REDISMODULE_OK;
@@ -77,19 +78,20 @@ int fork_kill(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     UNUSED(argv);
     UNUSED(argc);
-    if (RedisModule_Init(ctx,"fork",1,REDISMODULE_APIVER_1)== REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "fork", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"fork.create", fork_create,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "fork.create", fork_create, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"fork.exitcode", fork_exitcode,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "fork.exitcode", fork_exitcode, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"fork.kill", fork_kill,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "fork.kill", fork_kill, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;

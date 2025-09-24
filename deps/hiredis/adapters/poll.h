@@ -4,12 +4,12 @@
 
 #include "../async.h"
 #include "../sockcompat.h"
-#include <string.h> // for memset
 #include <errno.h>
+#include <string.h> // for memset
 
 /* Values to return from redisPollTick */
-#define REDIS_POLL_HANDLED_READ    1
-#define REDIS_POLL_HANDLED_WRITE   2
+#define REDIS_POLL_HANDLED_READ 1
+#define REDIS_POLL_HANDLED_WRITE 2
 #define REDIS_POLL_HANDLED_TIMEOUT 4
 
 /* An adapter to allow manual polling of the async context by checking the state
@@ -25,16 +25,18 @@ typedef struct redisPollEvents {
     double deadline;
 } redisPollEvents;
 
-static double redisPollTimevalToDouble(struct timeval *tv) {
+static double redisPollTimevalToDouble(struct timeval *tv)
+{
     if (tv == NULL)
         return 0.0;
     return tv->tv_sec + tv->tv_usec / 1000000.00;
 }
 
-static double redisPollGetNow(void) {
+static double redisPollGetNow(void)
+{
 #ifndef _MSC_VER
     struct timeval tv;
-    gettimeofday(&tv,NULL);
+    gettimeofday(&tv, NULL);
     return redisPollTimevalToDouble(&tv);
 #else
     FILETIME ft;
@@ -49,14 +51,15 @@ static double redisPollGetNow(void) {
 /* Poll for io, handling any pending callbacks.  The timeout argument can be
  * positive to wait for a maximum given time for IO, zero to poll, or negative
  * to wait forever */
-static int redisPollTick(redisAsyncContext *ac, double timeout) {
+static int redisPollTick(redisAsyncContext *ac, double timeout)
+{
     int reading, writing;
     struct pollfd pfd;
     int handled;
     int ns;
     int itimeout;
 
-    redisPollEvents *e = (redisPollEvents*)ac->ev.data;
+    redisPollEvents *e = (redisPollEvents *)ac->ev.data;
     if (!e)
         return 0;
 
@@ -69,7 +72,7 @@ static int redisPollTick(redisAsyncContext *ac, double timeout) {
     pfd.fd = e->fd;
     pfd.events = 0;
     if (reading)
-        pfd.events = POLLIN;   
+        pfd.events = POLLIN;
     if (writing)
         pfd.events |= POLLOUT;
 
@@ -86,7 +89,7 @@ static int redisPollTick(redisAsyncContext *ac, double timeout) {
             return ns;
         ns = 0;
     }
-    
+
     handled = 0;
     e->in_tick = 1;
     if (ns) {
@@ -126,28 +129,33 @@ static int redisPollTick(redisAsyncContext *ac, double timeout) {
     return handled;
 }
 
-static void redisPollAddRead(void *data) {
-    redisPollEvents *e = (redisPollEvents*)data;
+static void redisPollAddRead(void *data)
+{
+    redisPollEvents *e = (redisPollEvents *)data;
     e->reading = 1;
 }
 
-static void redisPollDelRead(void *data) {
-    redisPollEvents *e = (redisPollEvents*)data;
+static void redisPollDelRead(void *data)
+{
+    redisPollEvents *e = (redisPollEvents *)data;
     e->reading = 0;
 }
 
-static void redisPollAddWrite(void *data) {
-    redisPollEvents *e = (redisPollEvents*)data;
+static void redisPollAddWrite(void *data)
+{
+    redisPollEvents *e = (redisPollEvents *)data;
     e->writing = 1;
 }
 
-static void redisPollDelWrite(void *data) {
-    redisPollEvents *e = (redisPollEvents*)data;
+static void redisPollDelWrite(void *data)
+{
+    redisPollEvents *e = (redisPollEvents *)data;
     e->writing = 0;
 }
 
-static void redisPollCleanup(void *data) {
-    redisPollEvents *e = (redisPollEvents*)data;
+static void redisPollCleanup(void *data)
+{
+    redisPollEvents *e = (redisPollEvents *)data;
 
     /* if we are currently processing a tick, postpone deletion */
     if (e->in_tick)
@@ -158,12 +166,13 @@ static void redisPollCleanup(void *data) {
 
 static void redisPollScheduleTimer(void *data, struct timeval tv)
 {
-    redisPollEvents *e = (redisPollEvents*)data;
+    redisPollEvents *e = (redisPollEvents *)data;
     double now = redisPollGetNow();
     e->deadline = now + redisPollTimevalToDouble(&tv);
 }
 
-static int redisPollAttach(redisAsyncContext *ac) {
+static int redisPollAttach(redisAsyncContext *ac)
+{
     redisContext *c = &(ac->c);
     redisPollEvents *e;
 
@@ -172,7 +181,7 @@ static int redisPollAttach(redisAsyncContext *ac) {
         return REDIS_ERR;
 
     /* Create container for context and r/w events */
-    e = (redisPollEvents*)hi_malloc(sizeof(*e));
+    e = (redisPollEvents *)hi_malloc(sizeof(*e));
     if (e == NULL)
         return REDIS_ERR;
     memset(e, 0, sizeof(*e));

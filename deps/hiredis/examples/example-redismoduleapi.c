@@ -1,13 +1,14 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
-#include <hiredis.h>
-#include <async.h>
 #include <adapters/redismoduleapi.h>
+#include <async.h>
+#include <hiredis.h>
 
-void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
+void debugCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     (void)privdata; //unused
     redisReply *reply = r;
     if (reply == NULL) {
@@ -19,7 +20,8 @@ void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
     redisAsyncDisconnect(c);
 }
 
-void getCallback(redisAsyncContext *c, void *r, void *privdata) {
+void getCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     redisReply *reply = r;
     if (reply == NULL) {
         if (c->errstr) {
@@ -27,13 +29,14 @@ void getCallback(redisAsyncContext *c, void *r, void *privdata) {
         }
         return;
     }
-    printf("argv[%s]: %s\n", (char*)privdata, reply->str);
+    printf("argv[%s]: %s\n", (char *)privdata, reply->str);
 
     /* start another request that demonstrate timeout */
     redisAsyncCommand(c, debugCallback, NULL, "DEBUG SLEEP %f", 1.5);
 }
 
-void connectCallback(const redisAsyncContext *c, int status) {
+void connectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
         return;
@@ -41,7 +44,8 @@ void connectCallback(const redisAsyncContext *c, int status) {
     printf("Connected...\n");
 }
 
-void disconnectCallback(const redisAsyncContext *c, int status) {
+void disconnectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
         return;
@@ -59,7 +63,8 @@ void disconnectCallback(const redisAsyncContext *c, int status) {
  * 2- Load module:
  *       redis-server --loadmodule ./example-redismoduleapi.so value
  */
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
 
     int ret = RedisModule_Init(ctx, "example-redismoduleapi", 1, REDISMODULE_APIVER_1);
     if (ret != REDISMODULE_OK) {
@@ -80,13 +85,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     }
 
     size_t len;
-    const char *val = RedisModule_StringPtrLen(argv[argc-1], &len);
+    const char *val = RedisModule_StringPtrLen(argv[argc - 1], &len);
 
     RedisModuleCtx *module_ctx = RedisModule_GetDetachedThreadSafeContext(ctx);
     redisModuleAttach(c, module_ctx);
-    redisAsyncSetConnectCallback(c,connectCallback);
-    redisAsyncSetDisconnectCallback(c,disconnectCallback);
-    redisAsyncSetTimeout(c, (struct timeval){ .tv_sec = 1, .tv_usec = 0});
+    redisAsyncSetConnectCallback(c, connectCallback);
+    redisAsyncSetDisconnectCallback(c, disconnectCallback);
+    redisAsyncSetTimeout(c, (struct timeval){.tv_sec = 1, .tv_usec = 0});
 
     /*
     In this demo, we first `set key`, then `get key` to demonstrate the basic usage of the adapter.
@@ -96,6 +101,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     */
 
     redisAsyncCommand(c, NULL, NULL, "SET key %b", val, len);
-    redisAsyncCommand(c, getCallback, (char*)"end-1", "GET key");
+    redisAsyncCommand(c, getCallback, (char *)"end-1", "GET key");
     return 0;
 }

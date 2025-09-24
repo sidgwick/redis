@@ -27,20 +27,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <hiredis.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <hiredis.h>
 
 #define KEY_COUNT 5
 
-#define panicAbort(fmt, ...) \
-    do { \
-        fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__); \
-        exit(-1); \
+#define panicAbort(fmt, ...)                                                                                           \
+    do {                                                                                                               \
+        fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, __VA_ARGS__);                                \
+        exit(-1);                                                                                                      \
     } while (0)
 
-static void assertReplyAndFree(redisContext *context, redisReply *reply, int type) {
+static void assertReplyAndFree(redisContext *context, redisReply *reply, int type)
+{
     if (reply == NULL)
         panicAbort("NULL reply from server (error: %s)", context->errstr);
 
@@ -55,7 +56,8 @@ static void assertReplyAndFree(redisContext *context, redisReply *reply, int typ
 }
 
 /* Switch to the RESP3 protocol and enable client tracking */
-static void enableClientTracking(redisContext *c) {
+static void enableClientTracking(redisContext *c)
+{
     redisReply *reply = redisCommand(c, "HELLO 3");
     if (reply == NULL || c->err) {
         panicAbort("NULL reply or server error (error: %s)", c->errstr);
@@ -64,7 +66,7 @@ static void enableClientTracking(redisContext *c) {
     if (reply->type != REDIS_REPLY_MAP) {
         fprintf(stderr, "Error: Can't send HELLO 3 command.  Are you sure you're ");
         fprintf(stderr, "connected to redis-server >= 6.0.0?\nRedis error: %s\n",
-                        reply->type == REDIS_REPLY_ERROR ? reply->str : "(unknown)");
+                reply->type == REDIS_REPLY_ERROR ? reply->str : "(unknown)");
         exit(-1);
     }
 
@@ -75,35 +77,36 @@ static void enableClientTracking(redisContext *c) {
     assertReplyAndFree(c, reply, REDIS_REPLY_STATUS);
 }
 
-void pushReplyHandler(void *privdata, void *r) {
+void pushReplyHandler(void *privdata, void *r)
+{
     redisReply *reply = r;
     int *invalidations = privdata;
 
     /* Sanity check on the invalidation reply */
-    if (reply->type != REDIS_REPLY_PUSH || reply->elements != 2 ||
-        reply->element[1]->type != REDIS_REPLY_ARRAY ||
-        reply->element[1]->element[0]->type != REDIS_REPLY_STRING)
-    {
+    if (reply->type != REDIS_REPLY_PUSH || reply->elements != 2 || reply->element[1]->type != REDIS_REPLY_ARRAY ||
+        reply->element[1]->element[0]->type != REDIS_REPLY_STRING) {
         panicAbort("%s", "Can't parse PUSH message!");
     }
 
     /* Increment our invalidation count */
     *invalidations += 1;
 
-    printf("pushReplyHandler(): INVALIDATE '%s' (invalidation count: %d)\n",
-           reply->element[1]->element[0]->str, *invalidations);
+    printf("pushReplyHandler(): INVALIDATE '%s' (invalidation count: %d)\n", reply->element[1]->element[0]->str,
+           *invalidations);
 
     freeReplyObject(reply);
 }
 
 /* We aren't actually freeing anything here, but it is included to show that we can
  * have hiredis call our data destructor when freeing the context */
-void privdata_dtor(void *privdata) {
+void privdata_dtor(void *privdata)
+{
     unsigned int *icount = privdata;
     printf("privdata_dtor():  In context privdata dtor (invalidations: %u)\n", *icount);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     unsigned int j, invalidations = 0;
     redisContext *c;
     redisReply *reply;

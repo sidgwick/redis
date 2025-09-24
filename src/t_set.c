@@ -12,15 +12,14 @@
  * Portions of this file are available under BSD3 terms; see REDISCONTRIBUTIONS for more information.
  */
 
+#include "intset.h" /* Compact integer set structure */
 #include "server.h"
-#include "intset.h"  /* Compact integer set structure */
 
 /*-----------------------------------------------------------------------------
  * Set Commands
  *----------------------------------------------------------------------------*/
 
-void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
-                              robj *dstkey, int op);
+void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum, robj *dstkey, int op);
 
 /* Factory method to return a set that *can* hold "value". When the object has
  * an integer-encodable value, an intset will be returned. Otherwise a listpack
@@ -28,8 +27,9 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
  *
  * The size hint indicates approximately how many items will be added which is
  * used to determine the initial representation. */
-robj *setTypeCreate(sds value, size_t size_hint) {
-    if (isSdsRepresentableAsLongLong(value,NULL) == C_OK && size_hint <= server.set_max_intset_entries)
+robj *setTypeCreate(sds value, size_t size_hint)
+{
+    if (isSdsRepresentableAsLongLong(value, NULL) == C_OK && size_hint <= server.set_max_intset_entries)
         return createIntsetObject();
     if (size_hint <= server.set_max_listpack_entries)
         return createSetListpackObject();
@@ -43,35 +43,41 @@ robj *setTypeCreate(sds value, size_t size_hint) {
 
 /* Check if the existing set should be converted to another encoding based off the
  * the size hint. */
-void setTypeMaybeConvert(robj *set, size_t size_hint) {
-    if ((set->encoding == OBJ_ENCODING_LISTPACK && size_hint > server.set_max_listpack_entries)
-        || (set->encoding == OBJ_ENCODING_INTSET && size_hint > server.set_max_intset_entries))
-    {
+void setTypeMaybeConvert(robj *set, size_t size_hint)
+{
+    if ((set->encoding == OBJ_ENCODING_LISTPACK && size_hint > server.set_max_listpack_entries) ||
+        (set->encoding == OBJ_ENCODING_INTSET && size_hint > server.set_max_intset_entries)) {
         setTypeConvertAndExpand(set, OBJ_ENCODING_HT, size_hint, 1);
     }
 }
 
 /* Return the maximum number of entries to store in an intset. */
-static size_t intsetMaxEntries(void) {
+static size_t intsetMaxEntries(void)
+{
     size_t max_entries = server.set_max_intset_entries;
     /* limit to 1G entries due to intset internals. */
-    if (max_entries >= 1<<30) max_entries = 1<<30;
+    if (max_entries >= 1 << 30)
+        max_entries = 1 << 30;
     return max_entries;
 }
 
 /* Converts intset to HT if it contains too many entries. */
-static void maybeConvertIntset(robj *subject) {
+static void maybeConvertIntset(robj *subject)
+{
     serverAssert(subject->encoding == OBJ_ENCODING_INTSET);
     if (intsetLen(subject->ptr) > intsetMaxEntries())
-        setTypeConvert(subject,OBJ_ENCODING_HT);
+        setTypeConvert(subject, OBJ_ENCODING_HT);
 }
 
 /* When you know all set elements are integers, call this to convert the set to
  * an intset. No conversion happens if the set contains too many entries for an
  * intset. */
-static void maybeConvertToIntset(robj *set) {
-    if (set->encoding == OBJ_ENCODING_INTSET) return; /* already intset */
-    if (setTypeSize(set) > intsetMaxEntries()) return; /* can't use intset */
+static void maybeConvertToIntset(robj *set)
+{
+    if (set->encoding == OBJ_ENCODING_INTSET)
+        return; /* already intset */
+    if (setTypeSize(set) > intsetMaxEntries())
+        return; /* can't use intset */
     intset *is = intsetNew();
     char *str;
     size_t len = 0;
@@ -97,7 +103,8 @@ static void maybeConvertToIntset(robj *set) {
  *
  * If the value was already member of the set, nothing is done and 0 is
  * returned, otherwise the new element is added and 1 is returned. */
-int setTypeAdd(robj *subject, sds value) {
+int setTypeAdd(robj *subject, sds value)
+{
     return setTypeAddAux(subject, value, sdslen(value), 0, 1);
 }
 
@@ -107,13 +114,15 @@ int setTypeAdd(robj *subject, sds value) {
  * is set to NULL and llval is provided instead.
  *
  * Returns 1 if the value was added and 0 if it was already a member. */
-int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sds) {
+int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sds)
+{
     char tmpbuf[LONG_STR_SIZE];
     if (!str) {
         if (set->encoding == OBJ_ENCODING_INTSET) {
             uint8_t success = 0;
             set->ptr = intsetAdd(set->ptr, llval, &success);
-            if (success) maybeConvertIntset(set);
+            if (success)
+                maybeConvertIntset(set);
             return success;
         }
         /* Convert int to string. */
@@ -130,7 +139,8 @@ int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sd
         dictEntryLink bucket, link = dictFindLink(ht, sdsval, &bucket);
         if (link == NULL) {
             /* Key doesn't already exist in the set. Add it but dup the key. */
-            if (sdsval == str) sdsval = sdsdup(sdsval);
+            if (sdsval == str)
+                sdsval = sdsdup(sdsval);
             dictSetKeyAtLink(ht, sdsval, &bucket, 1);
             return 1;
         } else if (sdsval != str) {
@@ -142,25 +152,23 @@ int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sd
         unsigned char *lp = set->ptr;
         unsigned char *p = lpFirst(lp);
         if (p != NULL)
-            p = lpFind(lp, p, (unsigned char*)str, len, 0);
+            p = lpFind(lp, p, (unsigned char *)str, len, 0);
         if (p == NULL) {
             /* Not found.  */
-            if (lpLength(lp) < server.set_max_listpack_entries &&
-                len <= server.set_max_listpack_value &&
-                lpSafeToAdd(lp, len))
-            {
+            if (lpLength(lp) < server.set_max_listpack_entries && len <= server.set_max_listpack_value &&
+                lpSafeToAdd(lp, len)) {
                 if (str == tmpbuf) {
                     /* This came in as integer so we can avoid parsing it again.
                      * TODO: Create and use lpFindInteger; don't go via string. */
                     lp = lpAppendInteger(lp, llval);
                 } else {
-                    lp = lpAppend(lp, (unsigned char*)str, len);
+                    lp = lpAppend(lp, (unsigned char *)str, len);
                 }
                 set->ptr = lp;
             } else {
                 /* Size limit is reached. Convert to hashtable and add. */
                 setTypeConvertAndExpand(set, OBJ_ENCODING_HT, lpLength(lp) + 1, 1);
-                serverAssert(dictAdd(set->ptr,sdsnewlen(str,len),NULL) == DICT_OK);
+                serverAssert(dictAdd(set->ptr, sdsnewlen(str, len), NULL) == DICT_OK);
             }
             return 1;
         }
@@ -168,7 +176,7 @@ int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sd
         long long value;
         if (string2ll(str, len, &value)) {
             uint8_t success = 0;
-            set->ptr = intsetAdd(set->ptr,value,&success);
+            set->ptr = intsetAdd(set->ptr, value, &success);
             if (success) {
                 maybeConvertIntset(set);
                 return 1;
@@ -185,26 +193,22 @@ int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sd
                 size_t s2 = lpEstimateBytesRepeatedInteger(intsetMin(set->ptr), n);
                 totsize = max(s1, s2);
             }
-            if (intsetLen((const intset*)set->ptr) < server.set_max_listpack_entries &&
-                len <= server.set_max_listpack_value &&
-                maxelelen <= server.set_max_listpack_value &&
-                lpSafeToAdd(NULL, totsize + len))
-            {
+            if (intsetLen((const intset *)set->ptr) < server.set_max_listpack_entries &&
+                len <= server.set_max_listpack_value && maxelelen <= server.set_max_listpack_value &&
+                lpSafeToAdd(NULL, totsize + len)) {
                 /* In the "safe to add" check above we assumed all elements in
                  * the intset are of size maxelelen. This is an upper bound. */
-                setTypeConvertAndExpand(set, OBJ_ENCODING_LISTPACK,
-                                        intsetLen(set->ptr) + 1, 1);
+                setTypeConvertAndExpand(set, OBJ_ENCODING_LISTPACK, intsetLen(set->ptr) + 1, 1);
                 unsigned char *lp = set->ptr;
                 lp = lpAppend(lp, (unsigned char *)str, len);
                 lp = lpShrinkToFit(lp);
                 set->ptr = lp;
                 return 1;
             } else {
-                setTypeConvertAndExpand(set, OBJ_ENCODING_HT,
-                                        intsetLen(set->ptr) + 1, 1);
+                setTypeConvertAndExpand(set, OBJ_ENCODING_HT, intsetLen(set->ptr) + 1, 1);
                 /* The set *was* an intset and this value is not integer
                  * encodable, so dictAdd should always work. */
-                serverAssert(dictAdd(set->ptr,sdsnewlen(str,len),NULL) == DICT_OK);
+                serverAssert(dictAdd(set->ptr, sdsnewlen(str, len), NULL) == DICT_OK);
                 return 1;
             }
         }
@@ -216,7 +220,8 @@ int setTypeAddAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sd
 
 /* Deletes a value provided as an sds string from the set. Returns 1 if the
  * value was deleted and 0 if it was not a member of the set. */
-int setTypeRemove(robj *setobj, sds value) {
+int setTypeRemove(robj *setobj, sds value)
+{
     return setTypeRemoveAux(setobj, value, sdslen(value), 0, 1);
 }
 
@@ -226,12 +231,13 @@ int setTypeRemove(robj *setobj, sds value) {
  * is set to NULL and llval is provided instead.
  *
  * Returns 1 if the value was deleted and 0 if it was not a member of the set. */
-int setTypeRemoveAux(robj *setobj, char *str, size_t len, int64_t llval, int str_is_sds) {
+int setTypeRemoveAux(robj *setobj, char *str, size_t len, int64_t llval, int str_is_sds)
+{
     char tmpbuf[LONG_STR_SIZE];
     if (!str) {
         if (setobj->encoding == OBJ_ENCODING_INTSET) {
             int success;
-            setobj->ptr = intsetRemove(setobj->ptr,llval,&success);
+            setobj->ptr = intsetRemove(setobj->ptr, llval, &success);
             return success;
         }
         len = ll2string(tmpbuf, sizeof tmpbuf, llval);
@@ -242,13 +248,15 @@ int setTypeRemoveAux(robj *setobj, char *str, size_t len, int64_t llval, int str
     if (setobj->encoding == OBJ_ENCODING_HT) {
         sds sdsval = str_is_sds ? (sds)str : sdsnewlen(str, len);
         int deleted = (dictDelete(setobj->ptr, sdsval) == DICT_OK);
-        if (sdsval != str) sdsfree(sdsval); /* free temp copy */
+        if (sdsval != str)
+            sdsfree(sdsval); /* free temp copy */
         return deleted;
     } else if (setobj->encoding == OBJ_ENCODING_LISTPACK) {
         unsigned char *lp = setobj->ptr;
         unsigned char *p = lpFirst(lp);
-        if (p == NULL) return 0;
-        p = lpFind(lp, p, (unsigned char*)str, len, 0);
+        if (p == NULL)
+            return 0;
+        p = lpFind(lp, p, (unsigned char *)str, len, 0);
         if (p != NULL) {
             lp = lpDelete(lp, p, NULL);
             setobj->ptr = lp;
@@ -258,8 +266,9 @@ int setTypeRemoveAux(robj *setobj, char *str, size_t len, int64_t llval, int str
         long long llval;
         if (string2ll(str, len, &llval)) {
             int success;
-            setobj->ptr = intsetRemove(setobj->ptr,llval,&success);
-            if (success) return 1;
+            setobj->ptr = intsetRemove(setobj->ptr, llval, &success);
+            if (success)
+                return 1;
         }
     } else {
         serverPanic("Unknown set encoding");
@@ -269,7 +278,8 @@ int setTypeRemoveAux(robj *setobj, char *str, size_t len, int64_t llval, int str
 
 /* Check if an sds string is a member of the set. Returns 1 if the value is a
  * member of the set and 0 if it isn't. */
-int setTypeIsMember(robj *subject, sds value) {
+int setTypeIsMember(robj *subject, sds value)
+{
     return setTypeIsMemberAux(subject, value, sdslen(value), 0, 1);
 }
 
@@ -279,7 +289,8 @@ int setTypeIsMember(robj *subject, sds value) {
  * and llval is provided instead.
  *
  * Returns 1 if the value is a member of the set and 0 if it isn't. */
-int setTypeIsMemberAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sds) {
+int setTypeIsMemberAux(robj *set, char *str, size_t len, int64_t llval, int str_is_sds)
+{
     char tmpbuf[LONG_STR_SIZE];
     if (!str) {
         if (set->encoding == OBJ_ENCODING_INTSET)
@@ -292,7 +303,7 @@ int setTypeIsMemberAux(robj *set, char *str, size_t len, int64_t llval, int str_
     if (set->encoding == OBJ_ENCODING_LISTPACK) {
         unsigned char *lp = set->ptr;
         unsigned char *p = lpFirst(lp);
-        return p && lpFind(lp, p, (unsigned char*)str, len, 0);
+        return p && lpFind(lp, p, (unsigned char *)str, len, 0);
     } else if (set->encoding == OBJ_ENCODING_INTSET) {
         long long llval;
         return string2ll(str, len, &llval) && intsetFind(set->ptr, llval);
@@ -308,7 +319,8 @@ int setTypeIsMemberAux(robj *set, char *str, size_t len, int64_t llval, int str_
     }
 }
 
-setTypeIterator *setTypeInitIterator(robj *subject) {
+setTypeIterator *setTypeInitIterator(robj *subject)
+{
     setTypeIterator *si = zmalloc(sizeof(setTypeIterator));
     si->subject = subject;
     si->encoding = subject->encoding;
@@ -324,7 +336,8 @@ setTypeIterator *setTypeInitIterator(robj *subject) {
     return si;
 }
 
-void setTypeReleaseIterator(setTypeIterator *si) {
+void setTypeReleaseIterator(setTypeIterator *si)
+{
     if (si->encoding == OBJ_ENCODING_HT)
         dictReleaseIterator(si->di);
     zfree(si);
@@ -351,15 +364,17 @@ void setTypeReleaseIterator(setTypeIterator *si) {
  * used field with values which are easy to trap if misused.
  *
  * When there are no more elements -1 is returned. */
-int setTypeNext(setTypeIterator *si, char **str, size_t *len, int64_t *llele) {
+int setTypeNext(setTypeIterator *si, char **str, size_t *len, int64_t *llele)
+{
     if (si->encoding == OBJ_ENCODING_HT) {
         dictEntry *de = dictNext(si->di);
-        if (de == NULL) return -1;
+        if (de == NULL)
+            return -1;
         *str = dictGetKey(de);
         *len = sdslen(*str);
         *llele = -123456789; /* Not needed. Defensive. */
     } else if (si->encoding == OBJ_ENCODING_INTSET) {
-        if (!intsetGet(si->subject->ptr,si->ii++,llele))
+        if (!intsetGet(si->subject->ptr, si->ii++, llele))
             return -1;
         *str = NULL;
     } else if (si->encoding == OBJ_ENCODING_LISTPACK) {
@@ -370,7 +385,8 @@ int setTypeNext(setTypeIterator *si, char **str, size_t *len, int64_t *llele) {
         } else {
             lpi = lpNext(lp, lpi);
         }
-        if (lpi == NULL) return -1;
+        if (lpi == NULL)
+            return -1;
         si->lpi = lpi;
         unsigned int l = 0;
         *str = (char *)lpGetValue(lpi, &l, (long long *)llele);
@@ -388,13 +404,16 @@ int setTypeNext(setTypeIterator *si, char **str, size_t *len, int64_t *llele) {
  *
  * This function is the way to go for write operations where COW is not
  * an issue. */
-sds setTypeNextObject(setTypeIterator *si) {
+sds setTypeNextObject(setTypeIterator *si)
+{
     int64_t intele = 0;
     char *str;
     size_t len = 0;
 
-    if (setTypeNext(si, &str, &len, &intele) == -1) return NULL;
-    if (str != NULL) return sdsnewlen(str, len);
+    if (setTypeNext(si, &str, &len, &intele) == -1)
+        return NULL;
+    if (str != NULL)
+        return sdsnewlen(str, len);
     return sdsfromlonglong(intele);
 }
 
@@ -411,7 +430,8 @@ sds setTypeNextObject(setTypeIterator *si) {
  *
  * Note that both the str, len and llele pointers should be passed and cannot
  * be NULL. If str is set to NULL, the value is an integer stored in llele. */
-int setTypeRandomElement(robj *setobj, char **str, size_t *len, int64_t *llele) {
+int setTypeRandomElement(robj *setobj, char **str, size_t *len, int64_t *llele)
+{
     if (setobj->encoding == OBJ_ENCODING_HT) {
         dictEntry *de = dictGetFairRandomKey(setobj->ptr);
         *str = dictGetKey(de);
@@ -434,14 +454,15 @@ int setTypeRandomElement(robj *setobj, char **str, size_t *len, int64_t *llele) 
 }
 
 /* Pops a random element and returns it as an object. */
-robj *setTypePopRandom(robj *set) {
+robj *setTypePopRandom(robj *set)
+{
     robj *obj;
     if (set->encoding == OBJ_ENCODING_LISTPACK) {
         /* Find random and delete it without re-seeking the listpack. */
         unsigned int i = 0;
         unsigned char *p = lpNextRandom(set->ptr, lpFirst(set->ptr), &i, 1, 1);
         unsigned int len = 0; /* initialize to silence warning */
-        long long llele = 0; /* initialize to silence warning */
+        long long llele = 0;  /* initialize to silence warning */
         char *str = (char *)lpGetValue(p, &len, &llele);
         if (str)
             obj = createStringObject(str, len);
@@ -462,11 +483,12 @@ robj *setTypePopRandom(robj *set) {
     return obj;
 }
 
-unsigned long setTypeSize(const robj *subject) {
+unsigned long setTypeSize(const robj *subject)
+{
     if (subject->encoding == OBJ_ENCODING_HT) {
-        return dictSize((const dict*)subject->ptr);
+        return dictSize((const dict *)subject->ptr);
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
-        return intsetLen((const intset*)subject->ptr);
+        return intsetLen((const intset *)subject->ptr);
     } else if (subject->encoding == OBJ_ENCODING_LISTPACK) {
         return lpLength((unsigned char *)subject->ptr);
     } else {
@@ -477,7 +499,8 @@ unsigned long setTypeSize(const robj *subject) {
 /* Convert the set to specified encoding. The resulting dict (when converting
  * to a hash table) is presized to hold the number of elements in the original
  * set. */
-void setTypeConvert(robj *setobj, int enc) {
+void setTypeConvert(robj *setobj, int enc)
+{
     setTypeConvertAndExpand(setobj, enc, setTypeSize(setobj), 1);
 }
 
@@ -485,10 +508,10 @@ void setTypeConvert(robj *setobj, int enc) {
  * The 'panic' argument controls whether to panic on OOM (panic=1) or return
  * C_ERR on OOM (panic=0). If panic=1 is given, this function always returns
  * C_OK. */
-int setTypeConvertAndExpand(robj *setobj, int enc, unsigned long cap, int panic) {
+int setTypeConvertAndExpand(robj *setobj, int enc, unsigned long cap, int panic)
+{
     setTypeIterator *si;
-    serverAssertWithInfo(NULL,setobj,setobj->type == OBJ_SET &&
-                             setobj->encoding != enc);
+    serverAssertWithInfo(NULL, setobj, setobj->type == OBJ_SET && setobj->encoding != enc);
 
     if (enc == OBJ_ENCODING_HT) {
         dict *d = dictCreate(&setDictType);
@@ -505,7 +528,7 @@ int setTypeConvertAndExpand(robj *setobj, int enc, unsigned long cap, int panic)
         /* To add the elements we extract integers and create redis objects */
         si = setTypeInitIterator(setobj);
         while ((element = setTypeNextObject(si)) != NULL) {
-            serverAssert(dictAdd(d,element,NULL) == DICT_OK);
+            serverAssert(dictAdd(d, element, NULL) == DICT_OK);
         }
         setTypeReleaseIterator(si);
 
@@ -548,7 +571,8 @@ int setTypeConvertAndExpand(robj *setobj, int enc, unsigned long cap, int panic)
  * has the same encoding as the original one.
  *
  * The resulting object always has refcount set to 1 */
-robj *setTypeDup(robj *o) {
+robj *setTypeDup(robj *o)
+{
     robj *set;
     setTypeIterator *si;
 
@@ -559,7 +583,7 @@ robj *setTypeDup(robj *o) {
         intset *is = o->ptr;
         size_t size = intsetBlobLen(is);
         intset *newis = zmalloc(size);
-        memcpy(newis,is,size);
+        memcpy(newis, is, size);
         set = createObject(OBJ_SET, newis);
         set->encoding = OBJ_ENCODING_INTSET;
     } else if (o->encoding == OBJ_ENCODING_LISTPACK) {
@@ -587,14 +611,16 @@ robj *setTypeDup(robj *o) {
     return set;
 }
 
-void saddCommand(client *c) {
+void saddCommand(client *c)
+{
     kvobj *set;
     int j, added = 0;
     dictEntryLink link;
 
-    set = lookupKeyWriteWithLink(c->db,c->argv[1], &link);
-    if (checkType(c,set,OBJ_SET)) return;
-    
+    set = lookupKeyWriteWithLink(c->db, c->argv[1], &link);
+    if (checkType(c, set, OBJ_SET))
+        return;
+
     if (set == NULL) {
         robj *o = setTypeCreate(c->argv[2]->ptr, c->argc - 2);
         set = dbAddByLink(c->db, c->argv[1], &o, &link);
@@ -603,19 +629,21 @@ void saddCommand(client *c) {
     }
 
     for (j = 2; j < c->argc; j++) {
-        if (setTypeAdd(set,c->argv[j]->ptr)) added++;
+        if (setTypeAdd(set, c->argv[j]->ptr))
+            added++;
     }
     if (added) {
         unsigned long size = setTypeSize(set);
         updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size - added, size);
-        signalModifiedKey(c,c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[1],c->db->id);
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_SET, "sadd", c->argv[1], c->db->id);
     }
     server.dirty += added;
-    addReplyLongLong(c,added);
+    addReplyLongLong(c, added);
 }
 
-void sremCommand(client *c) {
+void sremCommand(client *c)
+{
     int j, deleted = 0, keyremoved = 0;
 
     kvobj *set = lookupKeyWriteOrReply(c, c->argv[1], shared.czero);
@@ -625,7 +653,7 @@ void sremCommand(client *c) {
     unsigned long oldSize = setTypeSize(set);
 
     for (j = 2; j < c->argc; j++) {
-        if (setTypeRemove(set,c->argv[j]->ptr)) {
+        if (setTypeRemove(set, c->argv[j]->ptr)) {
             deleted++;
             if (setTypeSize(set) == 0) {
                 dbDeleteSkipKeysizesUpdate(c->db, c->argv[1]);
@@ -637,58 +665,57 @@ void sremCommand(client *c) {
     if (deleted) {
         int64_t newSize = oldSize - deleted;
 
-        signalModifiedKey(c,c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->id);
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_SET, "srem", c->argv[1], c->db->id);
         if (keyremoved) {
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],
-                                c->db->id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
             newSize = -1; /* removed */
         }
         updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, oldSize, newSize);
         server.dirty += deleted;
     }
-    addReplyLongLong(c,deleted);
+    addReplyLongLong(c, deleted);
 }
 
-void smoveCommand(client *c) {
+void smoveCommand(client *c)
+{
     robj *srcset, *dstset, *ele;
-    srcset = lookupKeyWrite(c->db,c->argv[1]);
-    dstset = lookupKeyWrite(c->db,c->argv[2]);
+    srcset = lookupKeyWrite(c->db, c->argv[1]);
+    dstset = lookupKeyWrite(c->db, c->argv[2]);
     ele = c->argv[3];
 
     /* If the source key does not exist return 0 */
     if (srcset == NULL) {
-        addReply(c,shared.czero);
+        addReply(c, shared.czero);
         return;
     }
 
     /* If the source key has the wrong type, or the destination key
      * is set and has the wrong type, return with an error. */
-    if (checkType(c,srcset,OBJ_SET) ||
-        checkType(c,dstset,OBJ_SET)) return;
+    if (checkType(c, srcset, OBJ_SET) || checkType(c, dstset, OBJ_SET))
+        return;
 
     /* If srcset and dstset are equal, SMOVE is a no-op */
     if (srcset == dstset) {
-        addReply(c,setTypeIsMember(srcset,ele->ptr) ?
-            shared.cone : shared.czero);
+        addReply(c, setTypeIsMember(srcset, ele->ptr) ? shared.cone : shared.czero);
         return;
     }
 
     /* If the element cannot be removed from the src set, return 0. */
-    if (!setTypeRemove(srcset,ele->ptr)) {
-        addReply(c,shared.czero);
+    if (!setTypeRemove(srcset, ele->ptr)) {
+        addReply(c, shared.czero);
         return;
     }
-    notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET, "srem", c->argv[1], c->db->id);
 
     /* Update keysizes histogram */
     int64_t srcNewLen = setTypeSize(srcset), srcOldLen = srcNewLen + 1;
 
     /* Remove the src set from the database when empty */
     if (srcNewLen == 0) {
-        dbDeleteSkipKeysizesUpdate(c->db,c->argv[1]);
+        dbDeleteSkipKeysizesUpdate(c->db, c->argv[1]);
         srcNewLen = -1; /* removed */
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
     }
     updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, srcOldLen, srcNewLen);
 
@@ -698,55 +725,59 @@ void smoveCommand(client *c) {
         dbAdd(c->db, c->argv[2], &dstset);
     }
 
-    signalModifiedKey(c,c->db,c->argv[1]);
+    signalModifiedKey(c, c->db, c->argv[1]);
     server.dirty++;
 
     /* An extra key has changed when ele was successfully added to dstset */
-    if (setTypeAdd(dstset,ele->ptr)) {
+    if (setTypeAdd(dstset, ele->ptr)) {
         unsigned long dstLen = setTypeSize(dstset);
         updateKeysizesHist(c->db, getKeySlot(c->argv[2]->ptr), OBJ_SET, dstLen - 1, dstLen);
         server.dirty++;
-        signalModifiedKey(c,c->db,c->argv[2]);
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[2],c->db->id);
+        signalModifiedKey(c, c->db, c->argv[2]);
+        notifyKeyspaceEvent(NOTIFY_SET, "sadd", c->argv[2], c->db->id);
     }
-    addReply(c,shared.cone);
+    addReply(c, shared.cone);
 }
 
-void sismemberCommand(client *c) {
+void sismemberCommand(client *c)
+{
     kvobj *set;
 
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
-        checkType(c,set,OBJ_SET)) return;
+    if ((set = lookupKeyReadOrReply(c, c->argv[1], shared.czero)) == NULL || checkType(c, set, OBJ_SET))
+        return;
 
-    if (setTypeIsMember(set,c->argv[2]->ptr))
-        addReply(c,shared.cone);
+    if (setTypeIsMember(set, c->argv[2]->ptr))
+        addReply(c, shared.cone);
     else
-        addReply(c,shared.czero);
+        addReply(c, shared.czero);
 }
 
-void smismemberCommand(client *c) {
+void smismemberCommand(client *c)
+{
     /* Don't abort when the key cannot be found. Non-existing keys are empty
      * sets, where SMISMEMBER should respond with a series of zeros. */
     kvobj *set = lookupKeyRead(c->db, c->argv[1]);
-    if (set && checkType(c,set,OBJ_SET)) return;
+    if (set && checkType(c, set, OBJ_SET))
+        return;
 
-    addReplyArrayLen(c,c->argc - 2);
+    addReplyArrayLen(c, c->argc - 2);
 
     for (int j = 2; j < c->argc; j++) {
-        if (set && setTypeIsMember(set,c->argv[j]->ptr))
-            addReply(c,shared.cone);
+        if (set && setTypeIsMember(set, c->argv[j]->ptr))
+            addReply(c, shared.cone);
         else
-            addReply(c,shared.czero);
+            addReply(c, shared.czero);
     }
 }
 
-void scardCommand(client *c) {
+void scardCommand(client *c)
+{
     kvobj *kv;
 
-    if ((kv = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
-        checkType(c,kv,OBJ_SET)) return;
+    if ((kv = lookupKeyReadOrReply(c, c->argv[1], shared.czero)) == NULL || checkType(c, kv, OBJ_SET))
+        return;
 
-    addReplyLongLong(c,setTypeSize(kv));
+    addReplyLongLong(c, setTypeSize(kv));
 }
 
 /* Handle the "SPOP key <count>" variant. The normal version of the
@@ -757,23 +788,26 @@ void scardCommand(client *c) {
  * implementation for more info. */
 #define SPOP_MOVE_STRATEGY_MUL 5
 
-void spopWithCountCommand(client *c) {
+void spopWithCountCommand(client *c)
+{
     long l;
     unsigned long count, size, toRemove;
 
     /* Get the count argument */
-    if (getPositiveLongFromObjectOrReply(c,c->argv[2],&l,NULL) != C_OK) return;
-    count = (unsigned long) l;
+    if (getPositiveLongFromObjectOrReply(c, c->argv[2], &l, NULL) != C_OK)
+        return;
+    count = (unsigned long)l;
 
     /* Make sure a key with the name inputted exists, and that it's type is
      * indeed a kv. Otherwise, return nil */
     robj *set = lookupKeyWriteOrReply(c, c->argv[1], shared.emptyset[c->resp]);
-    if (set == NULL || checkType(c, set, OBJ_SET)) return;
+    if (set == NULL || checkType(c, set, OBJ_SET))
+        return;
 
     /* If count is zero, serve an empty set ASAP to avoid special
      * cases later. */
     if (count == 0) {
-        addReply(c,shared.emptyset[c->resp]);
+        addReply(c, shared.emptyset[c->resp]);
         return;
     }
 
@@ -781,7 +815,7 @@ void spopWithCountCommand(client *c) {
     toRemove = (count >= size) ? size : count;
 
     /* Generate an SPOP keyspace notification */
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET, "spop", c->argv[1], c->db->id);
     server.dirty += toRemove;
 
     /* CASE 1:
@@ -789,18 +823,18 @@ void spopWithCountCommand(client *c) {
      * the number of elements inside the set: simply return the whole set. */
     if (count >= size) {
         /* We just return the entire set */
-        sunionDiffGenericCommand(c,c->argv+1,1,NULL,SET_OP_UNION);
+        sunionDiffGenericCommand(c, c->argv + 1, 1, NULL, SET_OP_UNION);
 
         /* Delete the set as it is now empty */
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        dbDelete(c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
 
         /* todo: Move the spop notification to be executed after the command logic. */
 
         /* Propagate this command as a DEL or UNLINK operation */
         robj *aux = server.lazyfree_lazy_server_del ? shared.unlink : shared.del;
         rewriteClientCommandVector(c, 2, aux, c->argv[1]);
-        signalModifiedKey(c,c->db,c->argv[1]);
+        signalModifiedKey(c, c->db, c->argv[1]);
         return;
     }
 
@@ -812,13 +846,13 @@ void spopWithCountCommand(client *c) {
     propargv[0] = shared.srem;
     propargv[1] = c->argv[1];
     unsigned long propindex = 2;
-    addReplySetLen(c,count);
+    addReplySetLen(c, count);
 
     /* Common iteration vars. */
     char *str;
     size_t len = 0;
     int64_t llele = 0;
-    unsigned long remaining = size-count; /* Elements left after SPOP. */
+    unsigned long remaining = size - count; /* Elements left after SPOP. */
 
     /* If we are here, the number of requested elements is less than the
      * number of elements inside the set. Also we are sure that count < size.
@@ -827,9 +861,7 @@ void spopWithCountCommand(client *c) {
      * CASE 2: The number of elements to return is small compared to the
      * set size. We can just extract random elements and return them to
      * the set. */
-    if (remaining*SPOP_MOVE_STRATEGY_MUL > count &&
-        set->encoding == OBJ_ENCODING_LISTPACK)
-    {
+    if (remaining * SPOP_MOVE_STRATEGY_MUL > count && set->encoding == OBJ_ENCODING_LISTPACK) {
         /* Specialized case for listpack. Traverse it only once. */
         unsigned char *lp = set->ptr;
         unsigned char *p = lpFirst(lp);
@@ -865,7 +897,7 @@ void spopWithCountCommand(client *c) {
         zfree(ps);
         set->ptr = lp;
         updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size - count);
-    } else if (remaining*SPOP_MOVE_STRATEGY_MUL > count) {
+    } else if (remaining * SPOP_MOVE_STRATEGY_MUL > count) {
         for (unsigned long i = 0; i < count; i++) {
             propargv[propindex] = setTypePopRandom(set);
             addReplyBulk(c, propargv[propindex]);
@@ -881,7 +913,7 @@ void spopWithCountCommand(client *c) {
         }
         updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size - count);
     } else {
-    /* CASE 3: The number of elements to return is very big, approaching
+        /* CASE 3: The number of elements to return is very big, approaching
      * the size of the set itself. After some time extracting random elements
      * from such a set becomes computationally expensive, so we use
      * a different strategy, we extract random elements that we don't
@@ -912,7 +944,7 @@ void spopWithCountCommand(client *c) {
             zfree(ps);
             set->ptr = lp;
         } else {
-            while(remaining--) {
+            while (remaining--) {
                 int encoding = setTypeRandomElement(set, &str, &len, &llele);
                 if (!newset) {
                     newset = str ? createSetListpackObject() : createIntsetObject();
@@ -927,7 +959,7 @@ void spopWithCountCommand(client *c) {
         si = setTypeInitIterator(set);
         while (setTypeNext(si, &str, &len, &llele) != -1) {
             if (str == NULL) {
-                addReplyBulkLongLong(c,llele);
+                addReplyBulkLongLong(c, llele);
                 propargv[propindex++] = createStringObjectFromLongLong(llele);
             } else {
                 addReplyBulkCBuffer(c, str, len);
@@ -945,10 +977,10 @@ void spopWithCountCommand(client *c) {
         setTypeReleaseIterator(si);
 
         /* Update key size histogram "explicitly" and not indirectly by dbReplaceValue()
-         * since function dbReplaceValue() assumes the entire set is being replaced, 
-         * but here we're building the new set from the existing one. As a result, 
+         * since function dbReplaceValue() assumes the entire set is being replaced,
+         * but here we're building the new set from the existing one. As a result,
          * the size of the old set has already changed by the time we reach this point. */
-        updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size-count);
+        updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size - count);
         dbReplaceValue(c->db, c->argv[1], &newset, 0);
     }
 
@@ -967,10 +999,11 @@ void spopWithCountCommand(client *c) {
      * we propagated the command as a set of SREMs operations using
      * the alsoPropagate() API. */
     preventCommandPropagation(c);
-    signalModifiedKey(c,c->db,c->argv[1]);
+    signalModifiedKey(c, c->db, c->argv[1]);
 }
 
-void spopCommand(client *c) {
+void spopCommand(client *c)
+{
     unsigned long size;
     robj *ele;
 
@@ -978,25 +1011,26 @@ void spopCommand(client *c) {
         spopWithCountCommand(c);
         return;
     } else if (c->argc > 3) {
-        addReplyErrorObject(c,shared.syntaxerr);
+        addReplyErrorObject(c, shared.syntaxerr);
         return;
     }
 
     /* Make sure a key with the name inputted exists, and that it's type is
      * indeed a kv */
     kvobj *kv = lookupKeyWriteOrReply(c, c->argv[1], shared.null[c->resp]);
-    if (kv == NULL || checkType(c, kv, OBJ_SET)) return;
+    if (kv == NULL || checkType(c, kv, OBJ_SET))
+        return;
 
     size = setTypeSize(kv);
-    updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size-1);
+    updateKeysizesHist(c->db, getKeySlot(c->argv[1]->ptr), OBJ_SET, size, size - 1);
 
     /* Pop a random element from the kv */
     ele = setTypePopRandom(kv);
 
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET, "spop", c->argv[1], c->db->id);
 
     /* Replicate/AOF this command as an SREM operation */
-    rewriteClientCommandVector(c,3,shared.srem,c->argv[1],ele);
+    rewriteClientCommandVector(c, 3, shared.srem, c->argv[1], ele);
 
     /* Add the element to the reply */
     addReplyBulk(c, ele);
@@ -1004,12 +1038,12 @@ void spopCommand(client *c) {
 
     /* Delete the kv if it's empty */
     if (setTypeSize(kv) == 0) {
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        dbDelete(c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
     }
 
     /* Set has been modified */
-    signalModifiedKey(c,c->db,c->argv[1]);
+    signalModifiedKey(c, c->db, c->argv[1]);
     server.dirty++;
 }
 
@@ -1026,7 +1060,8 @@ void spopCommand(client *c) {
  * the number of randoms per time. */
 #define SRANDFIELD_RANDOM_SAMPLE_LIMIT 1000
 
-void srandmemberWithCountCommand(client *c) {
+void srandmemberWithCountCommand(client *c)
+{
     long l;
     unsigned long count, size;
     int uniq = 1;
@@ -1037,9 +1072,10 @@ void srandmemberWithCountCommand(client *c) {
 
     dict *d;
 
-    if (getRangeLongFromObjectOrReply(c,c->argv[2],-LONG_MAX,LONG_MAX,&l,NULL) != C_OK) return;
+    if (getRangeLongFromObjectOrReply(c, c->argv[2], -LONG_MAX, LONG_MAX, &l, NULL) != C_OK)
+        return;
     if (l >= 0) {
-        count = (unsigned long) l;
+        count = (unsigned long)l;
     } else {
         /* A negative count means: return the same elements multiple times
          * (i.e. don't remove the extracted element after every extraction). */
@@ -1047,13 +1083,13 @@ void srandmemberWithCountCommand(client *c) {
         uniq = 0;
     }
 
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptyarray))
-        == NULL || checkType(c,set,OBJ_SET)) return;
+    if ((set = lookupKeyReadOrReply(c, c->argv[1], shared.emptyarray)) == NULL || checkType(c, set, OBJ_SET))
+        return;
     size = setTypeSize(set);
 
     /* If count is zero, serve it ASAP to avoid special cases later. */
     if (count == 0) {
-        addReply(c,shared.emptyarray);
+        addReply(c, shared.emptyarray);
         return;
     }
 
@@ -1063,7 +1099,7 @@ void srandmemberWithCountCommand(client *c) {
      * structures. This case is the only one that also needs to return the
      * elements in random order. */
     if (!uniq || count == 1) {
-        addReplyArrayLen(c,count);
+        addReplyArrayLen(c, count);
 
         if (set->encoding == OBJ_ENCODING_LISTPACK && count > 1) {
             /* Specialized case for listpack, traversing it only once. */
@@ -1087,10 +1123,10 @@ void srandmemberWithCountCommand(client *c) {
             return;
         }
 
-        while(count--) {
+        while (count--) {
             setTypeRandomElement(set, &str, &len, &llele);
             if (str == NULL) {
-                addReplyBulkLongLong(c,llele);
+                addReplyBulkLongLong(c, llele);
             } else {
                 addReplyBulkCBuffer(c, str, len);
             }
@@ -1105,18 +1141,18 @@ void srandmemberWithCountCommand(client *c) {
      * elements inside the set: simply return the whole set. */
     if (count >= size) {
         setTypeIterator *si;
-        addReplyArrayLen(c,size);
+        addReplyArrayLen(c, size);
         si = setTypeInitIterator(set);
         while (setTypeNext(si, &str, &len, &llele) != -1) {
             if (str == NULL) {
-                addReplyBulkLongLong(c,llele);
+                addReplyBulkLongLong(c, llele);
             } else {
                 addReplyBulkCBuffer(c, str, len);
             }
             size--;
         }
         setTypeReleaseIterator(si);
-        serverAssert(size==0);
+        serverAssert(size == 0);
         return;
     }
 
@@ -1160,7 +1196,7 @@ void srandmemberWithCountCommand(client *c) {
      * This is done because if the number of requested elements is just
      * a bit less than the number of elements in the set, the natural approach
      * used into CASE 4 is highly inefficient. */
-    if (count*SRANDMEMBER_SUB_STRATEGY_MUL > size) {
+    if (count * SRANDMEMBER_SUB_STRATEGY_MUL > size) {
         setTypeIterator *si;
 
         /* Add all the elements into the temporary dictionary. */
@@ -1170,7 +1206,7 @@ void srandmemberWithCountCommand(client *c) {
             int retval = DICT_ERR;
 
             if (str == NULL) {
-                retval = dictAdd(d,sdsfromlonglong(llele),NULL);
+                retval = dictAdd(d, sdsfromlonglong(llele), NULL);
             } else {
                 retval = dictAdd(d, sdsnewlen(str, len), NULL);
             }
@@ -1183,9 +1219,9 @@ void srandmemberWithCountCommand(client *c) {
         while (size > count) {
             dictEntry *de;
             de = dictGetFairRandomKey(d);
-            dictUnlink(d,dictGetKey(de));
+            dictUnlink(d, dictGetKey(de));
             sdsfree(dictGetKey(de));
-            dictFreeUnlinkedEntry(d,de);
+            dictFreeUnlinkedEntry(d, de);
             size--;
         }
     }
@@ -1209,7 +1245,7 @@ void srandmemberWithCountCommand(client *c) {
             /* Try to add the object to the dictionary. If it already exists
              * free it, otherwise increment the number of objects we have
              * in the result dictionary. */
-            if (dictAdd(d,sdsele,NULL) == DICT_OK)
+            if (dictAdd(d, sdsele, NULL) == DICT_OK)
                 added++;
             else
                 sdsfree(sdsele);
@@ -1221,17 +1257,18 @@ void srandmemberWithCountCommand(client *c) {
         dictIterator di;
         dictEntry *de;
 
-        addReplyArrayLen(c,count);
+        addReplyArrayLen(c, count);
         dictInitIterator(&di, d);
-        while((de = dictNext(&di)) != NULL)
-            addReplyBulkSds(c,dictGetKey(de));
+        while ((de = dictNext(&di)) != NULL)
+            addReplyBulkSds(c, dictGetKey(de));
         dictResetIterator(&di);
         dictRelease(d);
     }
 }
 
 /* SRANDMEMBER <key> [<count>] */
-void srandmemberCommand(client *c) {
+void srandmemberCommand(client *c)
+{
     kvobj *set;
     char *str;
     size_t len = 0;
@@ -1241,37 +1278,43 @@ void srandmemberCommand(client *c) {
         srandmemberWithCountCommand(c);
         return;
     } else if (c->argc > 3) {
-        addReplyErrorObject(c,shared.syntaxerr);
+        addReplyErrorObject(c, shared.syntaxerr);
         return;
     }
 
     /* Handle variant without <count> argument. Reply with simple bulk string */
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp]))
-        == NULL || checkType(c,set,OBJ_SET)) return;
+    if ((set = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL || checkType(c, set, OBJ_SET))
+        return;
 
     setTypeRandomElement(set, &str, &len, &llele);
     if (str == NULL) {
-        addReplyBulkLongLong(c,llele);
+        addReplyBulkLongLong(c, llele);
     } else {
         addReplyBulkCBuffer(c, str, len);
     }
 }
 
-int qsortCompareSetsByCardinality(const void *s1, const void *s2) {
-    if (setTypeSize(*(robj**)s1) > setTypeSize(*(robj**)s2)) return 1;
-    if (setTypeSize(*(robj**)s1) < setTypeSize(*(robj**)s2)) return -1;
+int qsortCompareSetsByCardinality(const void *s1, const void *s2)
+{
+    if (setTypeSize(*(robj **)s1) > setTypeSize(*(robj **)s2))
+        return 1;
+    if (setTypeSize(*(robj **)s1) < setTypeSize(*(robj **)s2))
+        return -1;
     return 0;
 }
 
 /* This is used by SDIFF and in this case we can receive NULL that should
  * be handled as empty sets. */
-int qsortCompareSetsByRevCardinality(const void *s1, const void *s2) {
-    robj *o1 = *(robj**)s1, *o2 = *(robj**)s2;
+int qsortCompareSetsByRevCardinality(const void *s1, const void *s2)
+{
+    robj *o1 = *(robj **)s1, *o2 = *(robj **)s2;
     unsigned long first = o1 ? setTypeSize(o1) : 0;
     unsigned long second = o2 ? setTypeSize(o2) : 0;
 
-    if (first < second) return 1;
-    if (first > second) return -1;
+    if (first < second)
+        return 1;
+    if (first > second)
+        return -1;
     return 0;
 }
 
@@ -1283,10 +1326,10 @@ int qsortCompareSetsByRevCardinality(const void *s1, const void *s2) {
  * 'limit' work for SINTERCARD, stop searching after reaching the limit.
  * Passing a 0 means unlimited.
  */
-void sinterGenericCommand(client *c, robj **setkeys,
-                          unsigned long setnum, robj *dstkey,
-                          int cardinality_only, unsigned long limit) {
-    kvobj **sets = zmalloc(sizeof(robj*)*setnum);
+void sinterGenericCommand(client *c, robj **setkeys, unsigned long setnum, robj *dstkey, int cardinality_only,
+                          unsigned long limit)
+{
+    kvobj **sets = zmalloc(sizeof(robj *) * setnum);
     setTypeIterator *si;
     robj *dstset = NULL;
     char *str;
@@ -1316,23 +1359,23 @@ void sinterGenericCommand(client *c, robj **setkeys,
     if (empty > 0) {
         zfree(sets);
         if (dstkey) {
-            if (dbDelete(c->db,dstkey)) {
-                signalModifiedKey(c,c->db,dstkey);
-                notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->db->id);
+            if (dbDelete(c->db, dstkey)) {
+                signalModifiedKey(c, c->db, dstkey);
+                notifyKeyspaceEvent(NOTIFY_GENERIC, "del", dstkey, c->db->id);
                 server.dirty++;
             }
-            addReply(c,shared.czero);
+            addReply(c, shared.czero);
         } else if (cardinality_only) {
-            addReplyLongLong(c,cardinality);
+            addReplyLongLong(c, cardinality);
         } else {
-            addReply(c,shared.emptyset[c->resp]);
+            addReply(c, shared.emptyset[c->resp]);
         }
         return;
     }
 
     /* Sort sets from the smallest to largest, this will improve our
      * algorithm's performance */
-    qsort(sets,setnum,sizeof(robj*),qsortCompareSetsByCardinality);
+    qsort(sets, setnum, sizeof(robj *), qsortCompareSetsByCardinality);
 
     /* The first thing we should output is the total number of elements...
      * since this is a multi-bulk write, but at this stage we don't know
@@ -1369,11 +1412,11 @@ void sinterGenericCommand(client *c, robj **setkeys,
      * not include the element it is discarded */
     int only_integers = 1;
     si = setTypeInitIterator(sets[0]);
-    while((encoding = setTypeNext(si, &str, &len, &intobj)) != -1) {
+    while ((encoding = setTypeNext(si, &str, &len, &intobj)) != -1) {
         for (j = 1; j < setnum; j++) {
-            if (sets[j] == sets[0]) continue;
-            if (!setTypeIsMemberAux(sets[j], str, len, intobj,
-                                    encoding == OBJ_ENCODING_HT))
+            if (sets[j] == sets[0])
+                continue;
+            if (!setTypeIsMemberAux(sets[j], str, len, intobj, encoding == OBJ_ENCODING_HT))
                 break;
         }
 
@@ -1389,17 +1432,13 @@ void sinterGenericCommand(client *c, robj **setkeys,
                 if (str != NULL)
                     addReplyBulkCBuffer(c, str, len);
                 else
-                    addReplyBulkLongLong(c,intobj);
+                    addReplyBulkLongLong(c, intobj);
                 cardinality++;
             } else {
                 if (str && only_integers) {
                     /* It may be an integer although we got it as a string. */
-                    if (encoding == OBJ_ENCODING_HT &&
-                        string2ll(str, len, (long long *)&intobj))
-                    {
-                        if (dstset->encoding == OBJ_ENCODING_LISTPACK ||
-                            dstset->encoding == OBJ_ENCODING_INTSET)
-                        {
+                    if (encoding == OBJ_ENCODING_HT && string2ll(str, len, (long long *)&intobj)) {
+                        if (dstset->encoding == OBJ_ENCODING_LISTPACK || dstset->encoding == OBJ_ENCODING_INTSET) {
                             /* Adding it as an integer is more efficient. */
                             str = NULL;
                         }
@@ -1415,50 +1454,53 @@ void sinterGenericCommand(client *c, robj **setkeys,
     setTypeReleaseIterator(si);
 
     if (cardinality_only) {
-        addReplyLongLong(c,cardinality);
+        addReplyLongLong(c, cardinality);
     } else if (dstkey) {
         /* Store the resulting set into the target, if the intersection
          * is not an empty set. */
         if (setTypeSize(dstset) > 0) {
-            if (only_integers) maybeConvertToIntset(dstset);
+            if (only_integers)
+                maybeConvertToIntset(dstset);
             if (dstset->encoding == OBJ_ENCODING_LISTPACK) {
                 /* We allocated too much memory when we created it to avoid
                  * frequent reallocs. Therefore, we shrink it now. */
                 dstset->ptr = lpShrinkToFit(dstset->ptr);
             }
             setKey(c, c->db, dstkey, &dstset, 0);
-            addReplyLongLong(c,setTypeSize(dstset));
-            notifyKeyspaceEvent(NOTIFY_SET,"sinterstore",
-                dstkey,c->db->id);
+            addReplyLongLong(c, setTypeSize(dstset));
+            notifyKeyspaceEvent(NOTIFY_SET, "sinterstore", dstkey, c->db->id);
             server.dirty++;
         } else {
-            addReply(c,shared.czero);
-            if (dbDelete(c->db,dstkey)) {
+            addReply(c, shared.czero);
+            if (dbDelete(c->db, dstkey)) {
                 server.dirty++;
-                signalModifiedKey(c,c->db,dstkey);
-                notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->db->id);
+                signalModifiedKey(c, c->db, dstkey);
+                notifyKeyspaceEvent(NOTIFY_GENERIC, "del", dstkey, c->db->id);
             }
             decrRefCount(dstset);
         }
     } else {
-        setDeferredSetLen(c,replylen,cardinality);
+        setDeferredSetLen(c, replylen, cardinality);
     }
     zfree(sets);
 }
 
 /* SINTER key [key ...] */
-void sinterCommand(client *c) {
-    sinterGenericCommand(c, c->argv+1,  c->argc-1, NULL, 0, 0);
+void sinterCommand(client *c)
+{
+    sinterGenericCommand(c, c->argv + 1, c->argc - 1, NULL, 0, 0);
 }
 
 /* SMEMBERS key */
-void smembersCommand(client *c) {
+void smembersCommand(client *c)
+{
     setTypeIterator *si;
     char *str;
     size_t len = 0;
     int64_t intobj = 0;
     kvobj *setobj = lookupKeyRead(c->db, c->argv[1]);
-    if (checkType(c,setobj,OBJ_SET)) return;
+    if (checkType(c, setobj, OBJ_SET))
+        return;
     if (!setobj) {
         addReply(c, shared.emptyset[c->resp]);
         return;
@@ -1466,7 +1508,7 @@ void smembersCommand(client *c) {
 
     /* Prepare the response. */
     unsigned long length = setTypeSize(setobj);
-    addReplySetLen(c,length);
+    addReplySetLen(c, length);
     /* Iterate through the elements of the set. */
     si = setTypeInitIterator(setobj);
 
@@ -1482,13 +1524,13 @@ void smembersCommand(client *c) {
 }
 
 /* SINTERCARD numkeys key [key ...] [LIMIT limit] */
-void sinterCardCommand(client *c) {
+void sinterCardCommand(client *c)
+{
     long j;
     long numkeys = 0; /* Number of keys. */
     long limit = 0;   /* 0 means not limit. */
 
-    if (getRangeLongFromObjectOrReply(c, c->argv[1], 1, LONG_MAX,
-                                      &numkeys, "numkeys should be greater than 0") != C_OK)
+    if (getRangeLongFromObjectOrReply(c, c->argv[1], 1, LONG_MAX, &numkeys, "numkeys should be greater than 0") != C_OK)
         return;
     if (numkeys > (c->argc - 2)) {
         addReplyError(c, "Number of keys can't be greater than number of args");
@@ -1501,8 +1543,7 @@ void sinterCardCommand(client *c) {
 
         if (!strcasecmp(opt, "LIMIT") && moreargs) {
             j++;
-            if (getPositiveLongFromObjectOrReply(c, c->argv[j], &limit,
-                                                 "LIMIT can't be negative") != C_OK)
+            if (getPositiveLongFromObjectOrReply(c, c->argv[j], &limit, "LIMIT can't be negative") != C_OK)
                 return;
         } else {
             addReplyErrorObject(c, shared.syntaxerr);
@@ -1510,17 +1551,18 @@ void sinterCardCommand(client *c) {
         }
     }
 
-    sinterGenericCommand(c, c->argv+2, numkeys, NULL, 1, limit);
+    sinterGenericCommand(c, c->argv + 2, numkeys, NULL, 1, limit);
 }
 
 /* SINTERSTORE destination key [key ...] */
-void sinterstoreCommand(client *c) {
-    sinterGenericCommand(c, c->argv+2, c->argc-2, c->argv[1], 0, 0);
+void sinterstoreCommand(client *c)
+{
+    sinterGenericCommand(c, c->argv + 2, c->argc - 2, c->argv[1], 0, 0);
 }
 
-void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
-                              robj *dstkey, int op) {
-    robj **sets = zmalloc(sizeof(robj*)*setnum);
+void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum, robj *dstkey, int op)
+{
+    robj **sets = zmalloc(sizeof(robj *) * setnum);
     setTypeIterator *si;
     robj *dstset = NULL;
     int dstset_encoding = OBJ_ENCODING_INTSET;
@@ -1530,7 +1572,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
     int encoding;
     int j, cardinality = 0;
     int diff_algo = 1;
-    int sameset = 0; 
+    int sameset = 0;
 
     for (j = 0; j < setnum; j++) {
         kvobj *setobj = lookupKeyRead(c->db, setkeys[j]);
@@ -1538,7 +1580,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
             sets[j] = NULL;
             continue;
         }
-        if (checkType(c,setobj,OBJ_SET)) {
+        if (checkType(c, setobj, OBJ_SET)) {
             zfree(sets);
             return;
         }
@@ -1561,7 +1603,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         }
         sets[j] = setobj;
         if (j > 0 && sets[0] == sets[j]) {
-            sameset = 1; 
+            sameset = 1;
         }
     }
 
@@ -1578,7 +1620,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         long long algo_one_work = 0, algo_two_work = 0;
 
         for (j = 0; j < setnum; j++) {
-            if (sets[j] == NULL) continue;
+            if (sets[j] == NULL)
+                continue;
 
             algo_one_work += setTypeSize(sets[0]);
             algo_two_work += setTypeSize(sets[j]);
@@ -1593,8 +1636,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
             /* With algorithm 1 it is better to order the sets to subtract
              * by decreasing size, so that we are more likely to find
              * duplicated elements ASAP. */
-            qsort(sets+1,setnum-1,sizeof(robj*),
-                qsortCompareSetsByRevCardinality);
+            qsort(sets + 1, setnum - 1, sizeof(robj *), qsortCompareSetsByRevCardinality);
         }
     }
 
@@ -1611,7 +1653,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         /* Union is trivial, just add every element of every set to the
          * temporary set. */
         for (j = 0; j < setnum; j++) {
-            if (!sets[j]) continue; /* non existing keys are like empty sets */
+            if (!sets[j])
+                continue; /* non existing keys are like empty sets */
 
             si = setTypeInitIterator(sets[j]);
             while ((encoding = setTypeNext(si, &str, &len, &llval)) != -1) {
@@ -1633,10 +1676,11 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         si = setTypeInitIterator(sets[0]);
         while ((encoding = setTypeNext(si, &str, &len, &llval)) != -1) {
             for (j = 1; j < setnum; j++) {
-                if (!sets[j]) continue; /* no key is an empty set. */
-                if (sets[j] == sets[0]) break; /* same set! */
-                if (setTypeIsMemberAux(sets[j], str, len, llval,
-                                       encoding == OBJ_ENCODING_HT))
+                if (!sets[j])
+                    continue; /* no key is an empty set. */
+                if (sets[j] == sets[0])
+                    break; /* same set! */
+                if (setTypeIsMemberAux(sets[j], str, len, llval, encoding == OBJ_ENCODING_HT))
                     break;
             }
             if (j == setnum) {
@@ -1654,29 +1698,29 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
          * This is O(N) where N is the sum of all the elements in every
          * set. */
         for (j = 0; j < setnum; j++) {
-            if (!sets[j]) continue; /* non existing keys are like empty sets */
+            if (!sets[j])
+                continue; /* non existing keys are like empty sets */
 
             si = setTypeInitIterator(sets[j]);
-            while((encoding = setTypeNext(si, &str, &len, &llval)) != -1) {
+            while ((encoding = setTypeNext(si, &str, &len, &llval)) != -1) {
                 if (j == 0) {
-                    cardinality += setTypeAddAux(dstset, str, len, llval,
-                                                 encoding == OBJ_ENCODING_HT);
+                    cardinality += setTypeAddAux(dstset, str, len, llval, encoding == OBJ_ENCODING_HT);
                 } else {
-                    cardinality -= setTypeRemoveAux(dstset, str, len, llval,
-                                                    encoding == OBJ_ENCODING_HT);
+                    cardinality -= setTypeRemoveAux(dstset, str, len, llval, encoding == OBJ_ENCODING_HT);
                 }
             }
             setTypeReleaseIterator(si);
 
             /* Exit if result set is empty as any additional removal
              * of elements will have no effect. */
-            if (cardinality == 0) break;
+            if (cardinality == 0)
+                break;
         }
     }
 
     /* Output the content of the resulting set, if not in STORE mode */
     if (!dstkey) {
-        addReplySetLen(c,cardinality);
+        addReplySetLen(c, cardinality);
         si = setTypeInitIterator(dstset);
         while (setTypeNext(si, &str, &len, &llval) != -1) {
             if (str)
@@ -1685,24 +1729,21 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
                 addReplyBulkLongLong(c, llval);
         }
         setTypeReleaseIterator(si);
-        server.lazyfree_lazy_server_del ? freeObjAsync(NULL, dstset, -1) :
-                                          decrRefCount(dstset);
+        server.lazyfree_lazy_server_del ? freeObjAsync(NULL, dstset, -1) : decrRefCount(dstset);
     } else {
         /* If we have a target key where to store the resulting set
          * create this key with the result set inside */
         if (setTypeSize(dstset) > 0) {
             setKey(c, c->db, dstkey, &dstset, 0);
-            addReplyLongLong(c,setTypeSize(dstset));
-            notifyKeyspaceEvent(NOTIFY_SET,
-                op == SET_OP_UNION ? "sunionstore" : "sdiffstore",
-                dstkey,c->db->id);
+            addReplyLongLong(c, setTypeSize(dstset));
+            notifyKeyspaceEvent(NOTIFY_SET, op == SET_OP_UNION ? "sunionstore" : "sdiffstore", dstkey, c->db->id);
             server.dirty++;
         } else {
-            addReply(c,shared.czero);
-            if (dbDelete(c->db,dstkey)) {
+            addReply(c, shared.czero);
+            if (dbDelete(c->db, dstkey)) {
                 server.dirty++;
-                signalModifiedKey(c,c->db,dstkey);
-                notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->db->id);
+                signalModifiedKey(c, c->db, dstkey);
+                notifyKeyspaceEvent(NOTIFY_GENERIC, "del", dstkey, c->db->id);
             }
             decrRefCount(dstset);
         }
@@ -1711,31 +1752,37 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
 }
 
 /* SUNION key [key ...] */
-void sunionCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+1,c->argc-1,NULL,SET_OP_UNION);
+void sunionCommand(client *c)
+{
+    sunionDiffGenericCommand(c, c->argv + 1, c->argc - 1, NULL, SET_OP_UNION);
 }
 
 /* SUNIONSTORE destination key [key ...] */
-void sunionstoreCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+2,c->argc-2,c->argv[1],SET_OP_UNION);
+void sunionstoreCommand(client *c)
+{
+    sunionDiffGenericCommand(c, c->argv + 2, c->argc - 2, c->argv[1], SET_OP_UNION);
 }
 
 /* SDIFF key [key ...] */
-void sdiffCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+1,c->argc-1,NULL,SET_OP_DIFF);
+void sdiffCommand(client *c)
+{
+    sunionDiffGenericCommand(c, c->argv + 1, c->argc - 1, NULL, SET_OP_DIFF);
 }
 
 /* SDIFFSTORE destination key [key ...] */
-void sdiffstoreCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+2,c->argc-2,c->argv[1],SET_OP_DIFF);
+void sdiffstoreCommand(client *c)
+{
+    sunionDiffGenericCommand(c, c->argv + 2, c->argc - 2, c->argv[1], SET_OP_DIFF);
 }
 
-void sscanCommand(client *c) {
+void sscanCommand(client *c)
+{
     kvobj *set;
     unsigned long long cursor;
 
-    if (parseScanCursorOrReply(c,c->argv[2],&cursor) == C_ERR) return;
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||
-        checkType(c,set,OBJ_SET)) return;
-    scanGenericCommand(c,set,cursor);
+    if (parseScanCursorOrReply(c, c->argv[2], &cursor) == C_ERR)
+        return;
+    if ((set = lookupKeyReadOrReply(c, c->argv[1], shared.emptyscan)) == NULL || checkType(c, set, OBJ_SET))
+        return;
+    scanGenericCommand(c, set, cursor);
 }

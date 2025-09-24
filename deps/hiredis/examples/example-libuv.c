@@ -1,13 +1,14 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
-#include <hiredis.h>
-#include <async.h>
 #include <adapters/libuv.h>
+#include <async.h>
+#include <hiredis.h>
 
-void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
+void debugCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     (void)privdata; //unused
     redisReply *reply = r;
     if (reply == NULL) {
@@ -19,19 +20,21 @@ void debugCallback(redisAsyncContext *c, void *r, void *privdata) {
     redisAsyncDisconnect(c);
 }
 
-void getCallback(redisAsyncContext *c, void *r, void *privdata) {
+void getCallback(redisAsyncContext *c, void *r, void *privdata)
+{
     redisReply *reply = r;
     if (reply == NULL) {
         printf("`GET key` error: %s\n", c->errstr ? c->errstr : "unknown error");
         return;
     }
-    printf("`GET key` result: argv[%s]: %s\n", (char*)privdata, reply->str);
+    printf("`GET key` result: argv[%s]: %s\n", (char *)privdata, reply->str);
 
     /* start another request that demonstrate timeout */
     redisAsyncCommand(c, debugCallback, NULL, "DEBUG SLEEP %f", 1.5);
 }
 
-void connectCallback(const redisAsyncContext *c, int status) {
+void connectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("connect error: %s\n", c->errstr);
         return;
@@ -39,7 +42,8 @@ void connectCallback(const redisAsyncContext *c, int status) {
     printf("Connected...\n");
 }
 
-void disconnectCallback(const redisAsyncContext *c, int status) {
+void disconnectCallback(const redisAsyncContext *c, int status)
+{
     if (status != REDIS_OK) {
         printf("disconnect because of error: %s\n", c->errstr);
         return;
@@ -47,12 +51,13 @@ void disconnectCallback(const redisAsyncContext *c, int status) {
     printf("Disconnected...\n");
 }
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv)
+{
 #ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
 #endif
 
-    uv_loop_t* loop = uv_default_loop();
+    uv_loop_t *loop = uv_default_loop();
 
     redisAsyncContext *c = redisAsyncConnect("127.0.0.1", 6379);
     if (c->err) {
@@ -61,10 +66,10 @@ int main (int argc, char **argv) {
         return 1;
     }
 
-    redisLibuvAttach(c,loop);
-    redisAsyncSetConnectCallback(c,connectCallback);
-    redisAsyncSetDisconnectCallback(c,disconnectCallback);
-    redisAsyncSetTimeout(c, (struct timeval){ .tv_sec = 1, .tv_usec = 0});
+    redisLibuvAttach(c, loop);
+    redisAsyncSetConnectCallback(c, connectCallback);
+    redisAsyncSetDisconnectCallback(c, disconnectCallback);
+    redisAsyncSetTimeout(c, (struct timeval){.tv_sec = 1, .tv_usec = 0});
 
     /*
     In this demo, we first `set key`, then `get key` to demonstrate the basic usage of libuv adapter.
@@ -73,8 +78,8 @@ int main (int argc, char **argv) {
     timeout error, which is shown in the `debugCallback`.
     */
 
-    redisAsyncCommand(c, NULL, NULL, "SET key %b", argv[argc-1], strlen(argv[argc-1]));
-    redisAsyncCommand(c, getCallback, (char*)"end-1", "GET key");
+    redisAsyncCommand(c, NULL, NULL, "SET key %b", argv[argc - 1], strlen(argv[argc - 1]));
+    redisAsyncCommand(c, getCallback, (char *)"end-1", "GET key");
 
     uv_run(loop, UV_RUN_DEFAULT);
     return 0;

@@ -51,38 +51,39 @@
 #define absv(n) ((n) < 0 ? -(n) : (n))
 #define minv(a, b) ((a) < (b) ? (a) : (b))
 
-static uint64_t tens[] = { 10000000000000000000U,
-                           1000000000000000000U,
-                           100000000000000000U,
-                           10000000000000000U,
-                           1000000000000000U,
-                           100000000000000U,
-                           10000000000000U,
-                           1000000000000U,
-                           100000000000U,
-                           10000000000U,
-                           1000000000U,
-                           100000000U,
-                           10000000U,
-                           1000000U,
-                           100000U,
-                           10000U,
-                           1000U,
-                           100U,
-                           10U,
-                           1U };
+static uint64_t tens[] = {10000000000000000000U,
+                          1000000000000000000U,
+                          100000000000000000U,
+                          10000000000000000U,
+                          1000000000000000U,
+                          100000000000000U,
+                          10000000000000U,
+                          1000000000000U,
+                          100000000000U,
+                          10000000000U,
+                          1000000000U,
+                          100000000U,
+                          10000000U,
+                          1000000U,
+                          100000U,
+                          10000U,
+                          1000U,
+                          100U,
+                          10U,
+                          1U};
 
-static inline uint64_t get_dbits(double d) {
-    union
-    {
+static inline uint64_t get_dbits(double d)
+{
+    union {
         double dbl;
         uint64_t i;
-    } dbl_bits = { d };
+    } dbl_bits = {d};
 
     return dbl_bits.i;
 }
 
-static Fp build_fp(double d) {
+static Fp build_fp(double d)
+{
     uint64_t bits = get_dbits(d);
 
     Fp fp;
@@ -100,7 +101,8 @@ static Fp build_fp(double d) {
     return fp;
 }
 
-static void normalize(Fp *fp) {
+static void normalize(Fp *fp)
+{
     while ((fp->frac & hiddenbit) == 0) {
         fp->frac <<= 1;
         fp->exp--;
@@ -111,7 +113,8 @@ static void normalize(Fp *fp) {
     fp->exp -= shift;
 }
 
-static void get_normalized_boundaries(Fp *fp, Fp *lower, Fp *upper) {
+static void get_normalized_boundaries(Fp *fp, Fp *lower, Fp *upper)
+{
     upper->frac = (fp->frac << 1) + 1;
     upper->exp = fp->exp - 1;
 
@@ -134,7 +137,8 @@ static void get_normalized_boundaries(Fp *fp, Fp *lower, Fp *upper) {
     lower->exp = upper->exp;
 }
 
-static Fp multiply(Fp *a, Fp *b) {
+static Fp multiply(Fp *a, Fp *b)
+{
     const uint64_t lomask = 0x00000000FFFFFFFF;
 
     uint64_t ah_bl = (a->frac >> 32) * (b->frac & lomask);
@@ -146,25 +150,21 @@ static Fp multiply(Fp *a, Fp *b) {
     /* round up */
     tmp += 1U << 31;
 
-    Fp fp = { ah_bh + (ah_bl >> 32) + (al_bh >> 32) + (tmp >> 32), a->exp + b->exp + 64 };
+    Fp fp = {ah_bh + (ah_bl >> 32) + (al_bh >> 32) + (tmp >> 32), a->exp + b->exp + 64};
 
     return fp;
 }
 
-static void round_digit(char *digits,
-                        int ndigits,
-                        uint64_t delta,
-                        uint64_t rem,
-                        uint64_t kappa,
-                        uint64_t frac) {
-    while (rem < frac && delta - rem >= kappa &&
-           (rem + kappa < frac || frac - rem > rem + kappa - frac)) {
+static void round_digit(char *digits, int ndigits, uint64_t delta, uint64_t rem, uint64_t kappa, uint64_t frac)
+{
+    while (rem < frac && delta - rem >= kappa && (rem + kappa < frac || frac - rem > rem + kappa - frac)) {
         digits[ndigits - 1]--;
         rem += kappa;
     }
 }
 
-static int generate_digits(Fp *fp, Fp *upper, Fp *lower, char *digits, int *K) {
+static int generate_digits(Fp *fp, Fp *upper, Fp *lower, char *digits, int *K)
+{
     uint64_t wfrac = upper->frac - fp->frac;
     uint64_t delta = upper->frac - lower->frac;
 
@@ -223,7 +223,8 @@ static int generate_digits(Fp *fp, Fp *upper, Fp *lower, char *digits, int *K) {
     }
 }
 
-static int grisu2(double d, char *digits, int *K) {
+static int grisu2(double d, char *digits, int *K)
+{
     Fp w = build_fp(d);
 
     Fp lower, upper;
@@ -246,7 +247,8 @@ static int grisu2(double d, char *digits, int *K) {
     return generate_digits(&w, &upper, &lower, digits, K);
 }
 
-static int emit_digits(char *digits, int ndigits, char *dest, int K, bool neg) {
+static int emit_digits(char *digits, int ndigits, char *dest, int K, bool neg)
+{
     int exp = absv(K + ndigits - 1);
 
     /* write plain integer */
@@ -318,7 +320,8 @@ static int emit_digits(char *digits, int ndigits, char *dest, int K, bool neg) {
     return idx;
 }
 
-static int filter_special(double fp, char *dest) {
+static int filter_special(double fp, char *dest)
+{
     if (fp == 0.0) {
         dest[0] = '0';
         return 1;
@@ -346,7 +349,8 @@ static int filter_special(double fp, char *dest) {
     return 3;
 }
 
-int fpconv_dtoa(double d, char dest[24]) {
+int fpconv_dtoa(double d, char dest[24])
+{
     char digits[18];
 
     int str_len = 0;

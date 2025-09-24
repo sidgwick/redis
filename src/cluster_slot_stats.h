@@ -12,10 +12,10 @@
  * Portions of this file are available under BSD3 terms; see REDISCONTRIBUTIONS for more information.
  */
 
-#include "server.h"
 #include "cluster.h"
-#include "script.h"
 #include "cluster_legacy.h"
+#include "script.h"
+#include "server.h"
 
 /* General use-cases. */
 void clusterSlotStatReset(int slot);

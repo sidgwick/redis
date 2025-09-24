@@ -22,11 +22,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
-#include <stdint.h>
 
 #include "strbuf.h"
 
@@ -85,8 +85,7 @@ strbuf_t *strbuf_new(size_t len)
 static inline void debug_stats(strbuf_t *s)
 {
     if (s->debug) {
-        fprintf(stderr, "strbuf(%lx) reallocs: %d, length: %zd, size: %zd\n",
-                (long)s, s->reallocs, s->length, s->size);
+        fprintf(stderr, "strbuf(%lx) reallocs: %d, length: %zd, size: %zd\n", (long)s, s->reallocs, s->length, s->size);
     }
 }
 
@@ -153,7 +152,6 @@ static size_t calculate_new_size(strbuf_t *s, size_t len)
     return newsize;
 }
 
-
 /* Ensure strbuf can handle a string length bytes long (ignoring NULL
  * optional termination). */
 void strbuf_resize(strbuf_t *s, size_t len)
@@ -163,8 +161,7 @@ void strbuf_resize(strbuf_t *s, size_t len)
     newsize = calculate_new_size(s, len);
 
     if (s->debug > 1) {
-        fprintf(stderr, "strbuf(%lx) resize: %zd => %zd\n",
-                (long)s, s->size, newsize);
+        fprintf(stderr, "strbuf(%lx) resize: %zd => %zd\n", (long)s, s->size, newsize);
     }
 
     s->size = newsize;
@@ -191,7 +188,6 @@ void strbuf_append_string(strbuf_t *s, const char *str)
         space--;
     }
 }
-
 
 /* vi:ai et sw=4 ts=4:
  */

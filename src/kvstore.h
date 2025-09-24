@@ -15,14 +15,14 @@
 #ifndef DICTARRAY_H_
 #define DICTARRAY_H_
 
-#include "dict.h"
 #include "adlist.h"
+#include "dict.h"
 
 /* maximum number of bins of keysizes histogram */
 #define MAX_KEYSIZES_BINS 60
 #define MAX_KEYSIZES_TYPES 5 /* static_assert at db.c verifies == OBJ_TYPE_BASIC_MAX */
 
-/* When creating kvstore with flag `KVSTORE_ALLOC_META_KEYS_HIST`, then kvstore 
+/* When creating kvstore with flag `KVSTORE_ALLOC_META_KEYS_HIST`, then kvstore
  * alloc and memset struct kvstoreMetadata on init, yet, managed outside kvstore */
 typedef struct {
     int64_t keysizes_hist[MAX_KEYSIZES_TYPES][MAX_KEYSIZES_BINS];
@@ -37,22 +37,20 @@ typedef struct _kvstore kvstore;
 typedef struct _kvstoreIterator kvstoreIterator;
 typedef struct _kvstoreDictIterator kvstoreDictIterator;
 
-typedef int (kvstoreScanShouldSkipDict)(dict *d);
-typedef int (kvstoreExpandShouldSkipDictIndex)(int didx);
+typedef int(kvstoreScanShouldSkipDict)(dict *d);
+typedef int(kvstoreExpandShouldSkipDictIndex)(int didx);
 
-#define KVSTORE_ALLOCATE_DICTS_ON_DEMAND (1<<0)
-#define KVSTORE_FREE_EMPTY_DICTS (1<<1)
-#define KVSTORE_ALLOC_META_KEYS_HIST (1<<2) /* Alloc keysizes histogram */
+#define KVSTORE_ALLOCATE_DICTS_ON_DEMAND (1 << 0)
+#define KVSTORE_FREE_EMPTY_DICTS (1 << 1)
+#define KVSTORE_ALLOC_META_KEYS_HIST (1 << 2) /* Alloc keysizes histogram */
 kvstore *kvstoreCreate(dictType *type, int num_dicts_bits, int flags);
-void kvstoreEmpty(kvstore *kvs, void(callback)(dict*));
+void kvstoreEmpty(kvstore *kvs, void(callback)(dict *));
 void kvstoreRelease(kvstore *kvs);
 unsigned long long kvstoreSize(kvstore *kvs);
 unsigned long kvstoreBuckets(kvstore *kvs);
 size_t kvstoreMemUsage(kvstore *kvs);
-unsigned long long kvstoreScan(kvstore *kvs, unsigned long long cursor,
-                               int onlydidx, dictScanFunction *scan_cb,
-                               kvstoreScanShouldSkipDict *skip_cb,
-                               void *privdata);
+unsigned long long kvstoreScan(kvstore *kvs, unsigned long long cursor, int onlydidx, dictScanFunction *scan_cb,
+                               kvstoreScanShouldSkipDict *skip_cb, void *privdata);
 int kvstoreExpand(kvstore *kvs, uint64_t newsize, int try_expand, kvstoreExpandShouldSkipDictIndex *skip_cb);
 int kvstoreGetFairRandomDictIndex(kvstore *kvs);
 void kvstoreGetStats(kvstore *kvs, char *buf, size_t bufsize, int full);
@@ -88,7 +86,8 @@ dictEntry *kvstoreDictGetRandomKey(kvstore *kvs, int didx);
 dictEntry *kvstoreDictGetFairRandomKey(kvstore *kvs, int didx);
 unsigned int kvstoreDictGetSomeKeys(kvstore *kvs, int didx, dictEntry **des, unsigned int count);
 int kvstoreDictExpand(kvstore *kvs, int didx, unsigned long size);
-unsigned long kvstoreDictScanDefrag(kvstore *kvs, int didx, unsigned long v, dictScanFunction *fn, dictDefragFunctions *defragfns, void *privdata);
+unsigned long kvstoreDictScanDefrag(kvstore *kvs, int didx, unsigned long v, dictScanFunction *fn,
+                                    dictDefragFunctions *defragfns, void *privdata);
 typedef dict *(kvstoreDictLUTDefragFunction)(dict *d);
 unsigned long kvstoreDictLUTDefrag(kvstore *kvs, unsigned long cursor, kvstoreDictLUTDefragFunction *defragfn);
 void *kvstoreDictFetchValue(kvstore *kvs, int didx, const void *key);
@@ -105,7 +104,7 @@ dictEntryLink kvstoreDictFindLink(kvstore *kvs, int didx, void *key, dictEntryLi
 void kvstoreDictSetAtLink(kvstore *kvs, int didx, void *kv, dictEntryLink *link, int newItem);
 
 /* dict with distinct key & value (no_value=1) currently is used only by pubsub. */
-void kvstoreDictSetKey(kvstore *kvs, int didx, dictEntry* de, void *key);
+void kvstoreDictSetKey(kvstore *kvs, int didx, dictEntry *de, void *key);
 void kvstoreDictSetVal(kvstore *kvs, int didx, dictEntry *de, void *val);
 
 #ifdef REDIS_TEST

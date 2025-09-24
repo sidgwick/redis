@@ -22,65 +22,65 @@
  */
 typedef struct decay_s decay_t;
 struct decay_s {
-	/* Synchronizes all non-atomic fields. */
-	malloc_mutex_t mtx;
-	/*
-	 * True if a thread is currently purging the extents associated with
-	 * this decay structure.
-	 */
-	bool purging;
-	/*
-	 * Approximate time in milliseconds from the creation of a set of unused
-	 * dirty pages until an equivalent set of unused dirty pages is purged
-	 * and/or reused.
-	 */
-	atomic_zd_t time_ms;
-	/* time / SMOOTHSTEP_NSTEPS. */
-	nstime_t interval;
-	/*
-	 * Time at which the current decay interval logically started.  We do
-	 * not actually advance to a new epoch until sometime after it starts
-	 * because of scheduling and computation delays, and it is even possible
-	 * to completely skip epochs.  In all cases, during epoch advancement we
-	 * merge all relevant activity into the most recently recorded epoch.
-	 */
-	nstime_t epoch;
-	/* Deadline randomness generator. */
-	uint64_t jitter_state;
-	/*
-	 * Deadline for current epoch.  This is the sum of interval and per
-	 * epoch jitter which is a uniform random variable in [0..interval).
-	 * Epochs always advance by precise multiples of interval, but we
-	 * randomize the deadline to reduce the likelihood of arenas purging in
-	 * lockstep.
-	 */
-	nstime_t deadline;
-	/*
-	 * The number of pages we cap ourselves at in the current epoch, per
-	 * decay policies.  Updated on an epoch change.  After an epoch change,
-	 * the caller should take steps to try to purge down to this amount.
-	 */
-	size_t npages_limit;
-	/*
-	 * Number of unpurged pages at beginning of current epoch.  During epoch
-	 * advancement we use the delta between arena->decay_*.nunpurged and
-	 * ecache_npages_get(&arena->ecache_*) to determine how many dirty pages,
-	 * if any, were generated.
-	 */
-	size_t nunpurged;
-	/*
-	 * Trailing log of how many unused dirty pages were generated during
-	 * each of the past SMOOTHSTEP_NSTEPS decay epochs, where the last
-	 * element is the most recent epoch.  Corresponding epoch times are
-	 * relative to epoch.
-	 *
-	 * Updated only on epoch advance, triggered by
-	 * decay_maybe_advance_epoch, below.
-	 */
-	size_t backlog[SMOOTHSTEP_NSTEPS];
+    /* Synchronizes all non-atomic fields. */
+    malloc_mutex_t mtx;
+    /*
+     * True if a thread is currently purging the extents associated with
+     * this decay structure.
+     */
+    bool purging;
+    /*
+     * Approximate time in milliseconds from the creation of a set of unused
+     * dirty pages until an equivalent set of unused dirty pages is purged
+     * and/or reused.
+     */
+    atomic_zd_t time_ms;
+    /* time / SMOOTHSTEP_NSTEPS. */
+    nstime_t interval;
+    /*
+     * Time at which the current decay interval logically started.  We do
+     * not actually advance to a new epoch until sometime after it starts
+     * because of scheduling and computation delays, and it is even possible
+     * to completely skip epochs.  In all cases, during epoch advancement we
+     * merge all relevant activity into the most recently recorded epoch.
+     */
+    nstime_t epoch;
+    /* Deadline randomness generator. */
+    uint64_t jitter_state;
+    /*
+     * Deadline for current epoch.  This is the sum of interval and per
+     * epoch jitter which is a uniform random variable in [0..interval).
+     * Epochs always advance by precise multiples of interval, but we
+     * randomize the deadline to reduce the likelihood of arenas purging in
+     * lockstep.
+     */
+    nstime_t deadline;
+    /*
+     * The number of pages we cap ourselves at in the current epoch, per
+     * decay policies.  Updated on an epoch change.  After an epoch change,
+     * the caller should take steps to try to purge down to this amount.
+     */
+    size_t npages_limit;
+    /*
+     * Number of unpurged pages at beginning of current epoch.  During epoch
+     * advancement we use the delta between arena->decay_*.nunpurged and
+     * ecache_npages_get(&arena->ecache_*) to determine how many dirty pages,
+     * if any, were generated.
+     */
+    size_t nunpurged;
+    /*
+     * Trailing log of how many unused dirty pages were generated during
+     * each of the past SMOOTHSTEP_NSTEPS decay epochs, where the last
+     * element is the most recent epoch.  Corresponding epoch times are
+     * relative to epoch.
+     *
+     * Updated only on epoch advance, triggered by
+     * decay_maybe_advance_epoch, below.
+     */
+    size_t backlog[SMOOTHSTEP_NSTEPS];
 
-	/* Peak number of pages in associated extents.  Used for debug only. */
-	uint64_t ceil_npages;
+    /* Peak number of pages in associated extents.  Used for debug only. */
+    uint64_t ceil_npages;
 };
 
 /*
@@ -89,7 +89,7 @@ struct decay_s {
  */
 static inline ssize_t
 decay_ms_read(const decay_t *decay) {
-	return atomic_load_zd(&decay->time_ms, ATOMIC_RELAXED);
+    return atomic_load_zd(&decay->time_ms, ATOMIC_RELAXED);
 }
 
 /*
@@ -98,13 +98,13 @@ decay_ms_read(const decay_t *decay) {
  */
 static inline size_t
 decay_npages_limit_get(const decay_t *decay) {
-	return decay->npages_limit;
+    return decay->npages_limit;
 }
 
 /* How many unused dirty pages were generated during the last epoch. */
 static inline size_t
 decay_epoch_npages_delta(const decay_t *decay) {
-	return decay->backlog[SMOOTHSTEP_NSTEPS - 1];
+    return decay->backlog[SMOOTHSTEP_NSTEPS - 1];
 }
 
 /*
@@ -115,26 +115,26 @@ decay_epoch_npages_delta(const decay_t *decay) {
  */
 static inline uint64_t
 decay_epoch_duration_ns(const decay_t *decay) {
-	return nstime_ns(&decay->interval);
+    return nstime_ns(&decay->interval);
 }
 
 static inline bool
 decay_immediately(const decay_t *decay) {
-	ssize_t decay_ms = decay_ms_read(decay);
-	return decay_ms == 0;
+    ssize_t decay_ms = decay_ms_read(decay);
+    return decay_ms == 0;
 }
 
 static inline bool
 decay_disabled(const decay_t *decay) {
-	ssize_t decay_ms = decay_ms_read(decay);
-	return decay_ms < 0;
+    ssize_t decay_ms = decay_ms_read(decay);
+    return decay_ms < 0;
 }
 
 /* Returns true if decay is enabled and done gradually. */
 static inline bool
 decay_gradually(const decay_t *decay) {
-	ssize_t decay_ms = decay_ms_read(decay);
-	return decay_ms > 0;
+    ssize_t decay_ms = decay_ms_read(decay);
+    return decay_ms > 0;
 }
 
 /*
@@ -166,12 +166,12 @@ void decay_reinit(decay_t *decay, nstime_t *cur_time, ssize_t decay_ms);
 /*
  * Compute how many of 'npages_new' pages we would need to purge in 'time'.
  */
-uint64_t decay_npages_purge_in(decay_t *decay, nstime_t *time,
-    size_t npages_new);
+uint64_t decay_npages_purge_in(
+  decay_t *decay, nstime_t *time, size_t npages_new);
 
 /* Returns true if the epoch advanced and there are pages to purge. */
-bool decay_maybe_advance_epoch(decay_t *decay, nstime_t *new_time,
-    size_t current_npages);
+bool decay_maybe_advance_epoch(
+  decay_t *decay, nstime_t *new_time, size_t current_npages);
 
 /*
  * Calculates wait time until a number of pages in the interval
@@ -180,7 +180,7 @@ bool decay_maybe_advance_epoch(decay_t *decay, nstime_t *new_time,
  * Returns number of nanoseconds or DECAY_UNBOUNDED_TIME_TO_PURGE in case of
  * indefinite wait.
  */
-uint64_t decay_ns_until_purge(decay_t *decay, size_t npages_current,
-    uint64_t npages_threshold);
+uint64_t decay_ns_until_purge(
+  decay_t *decay, size_t npages_current, uint64_t npages_threshold);
 
 #endif /* JEMALLOC_INTERNAL_DECAY_H */

@@ -23,15 +23,18 @@ typedef struct {
     RedisModuleString *strval;
 } DataType;
 
-static void *datatype_load(RedisModuleIO *io, int encver) {
+static void *datatype_load(RedisModuleIO *io, int encver)
+{
     load_encver = encver;
     int intval = RedisModule_LoadSigned(io);
-    if (RedisModule_IsIOError(io)) return NULL;
+    if (RedisModule_IsIOError(io))
+        return NULL;
 
     RedisModuleString *strval = RedisModule_LoadString(io);
-    if (RedisModule_IsIOError(io)) return NULL;
+    if (RedisModule_IsIOError(io))
+        return NULL;
 
-    DataType *dt = (DataType *) RedisModule_Alloc(sizeof(DataType));
+    DataType *dt = (DataType *)RedisModule_Alloc(sizeof(DataType));
     dt->intval = intval;
     dt->strval = strval;
 
@@ -48,29 +51,33 @@ static void *datatype_load(RedisModuleIO *io, int encver) {
     return dt;
 }
 
-static void datatype_save(RedisModuleIO *io, void *value) {
-    DataType *dt = (DataType *) value;
+static void datatype_save(RedisModuleIO *io, void *value)
+{
+    DataType *dt = (DataType *)value;
     RedisModule_SaveSigned(io, dt->intval);
     RedisModule_SaveString(io, dt->strval);
 }
 
-static void datatype_free(void *value) {
+static void datatype_free(void *value)
+{
     if (value) {
-        DataType *dt = (DataType *) value;
+        DataType *dt = (DataType *)value;
 
-        if (dt->strval) RedisModule_FreeString(NULL, dt->strval);
+        if (dt->strval)
+            RedisModule_FreeString(NULL, dt->strval);
         RedisModule_Free(dt);
     }
 }
 
-static void *datatype_copy(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value) {
+static void *datatype_copy(RedisModuleString *fromkey, RedisModuleString *tokey, const void *value)
+{
     const DataType *old = value;
 
     /* Answers to ultimate questions cannot be copied! */
     if (old->intval == 42)
         return NULL;
 
-    DataType *new = (DataType *) RedisModule_Alloc(sizeof(DataType));
+    DataType *new = (DataType *)RedisModule_Alloc(sizeof(DataType));
 
     new->intval = old->intval;
     new->strval = RedisModule_CreateStringFromString(NULL, old->strval);
@@ -89,7 +96,8 @@ static void *datatype_copy(RedisModuleString *fromkey, RedisModuleString *tokey,
     return new;
 }
 
-static int datatype_set(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_set(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 4) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -115,7 +123,8 @@ static int datatype_set(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-static int datatype_restore(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_restore(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 4) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -141,7 +150,8 @@ static int datatype_restore(RedisModuleCtx *ctx, RedisModuleString **argv, int a
     return REDISMODULE_OK;
 }
 
-static int datatype_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -161,7 +171,8 @@ static int datatype_get(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
-static int datatype_dump(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_dump(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -182,7 +193,8 @@ static int datatype_dump(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
     return REDISMODULE_OK;
 }
 
-static int datatype_swap(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_swap(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 3) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -206,7 +218,8 @@ static int datatype_swap(RedisModuleCtx *ctx, RedisModuleString **argv, int argc
 }
 
 /* used to enable or disable slow loading */
-static int datatype_slow_loading(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_slow_loading(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
@@ -223,7 +236,8 @@ static int datatype_slow_loading(RedisModuleCtx *ctx, RedisModuleString **argv, 
 }
 
 /* used to test if we reached the slow loading code */
-static int datatype_is_in_slow_loading(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int datatype_is_in_slow_loading(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     if (argc != 1) {
         RedisModule_WrongArity(ctx);
@@ -234,18 +248,17 @@ static int datatype_is_in_slow_loading(RedisModuleCtx *ctx, RedisModuleString **
     return REDISMODULE_OK;
 }
 
-int createDataTypeBlockCheck(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int createDataTypeBlockCheck(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     static RedisModuleType *datatype_outside_onload = NULL;
 
-    RedisModuleTypeMethods datatype_methods = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = datatype_load,
-        .rdb_save = datatype_save,
-        .free = datatype_free,
-        .copy = datatype_copy
-    };
+    RedisModuleTypeMethods datatype_methods = {.version = REDISMODULE_TYPE_METHOD_VERSION,
+                                               .rdb_load = datatype_load,
+                                               .rdb_save = datatype_save,
+                                               .free = datatype_free,
+                                               .copy = datatype_copy};
 
     datatype_outside_onload = RedisModule_CreateDataType(ctx, "test_dt_outside_onload", 1, &datatype_methods);
 
@@ -259,61 +272,60 @@ int createDataTypeBlockCheck(RedisModuleCtx *ctx, RedisModuleString **argv, int 
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"datatype",DATATYPE_ENC_VER,REDISMODULE_APIVER_1) == REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "datatype", DATATYPE_ENC_VER, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     /* Creates a command which creates a datatype outside OnLoad() function. */
-    if (RedisModule_CreateCommand(ctx,"block.create.datatype.outside.onload", createDataTypeBlockCheck, "write", 0, 0, 0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "block.create.datatype.outside.onload", createDataTypeBlockCheck, "write", 0, 0,
+                                  0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS);
 
-    RedisModuleTypeMethods datatype_methods = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = datatype_load,
-        .rdb_save = datatype_save,
-        .free = datatype_free,
-        .copy = datatype_copy
-    };
+    RedisModuleTypeMethods datatype_methods = {.version = REDISMODULE_TYPE_METHOD_VERSION,
+                                               .rdb_load = datatype_load,
+                                               .rdb_save = datatype_save,
+                                               .free = datatype_free,
+                                               .copy = datatype_copy};
 
     datatype = RedisModule_CreateDataType(ctx, "test___dt", 1, &datatype_methods);
     if (datatype == NULL)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"datatype.set", datatype_set,
-                                  "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.set", datatype_set, "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"datatype.get", datatype_get,"",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.get", datatype_get, "", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"datatype.restore", datatype_restore,
-                                  "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.restore", datatype_restore, "write deny-oom", 1, 1, 1) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"datatype.dump", datatype_dump,"",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.dump", datatype_dump, "", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "datatype.swap", datatype_swap,
-                                  "write", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.swap", datatype_swap, "write", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "datatype.slow_loading", datatype_slow_loading,
-                                  "allow-loading", 0, 0, 0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.slow_loading", datatype_slow_loading, "allow-loading", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "datatype.is_in_slow_loading", datatype_is_in_slow_loading,
-                                  "allow-loading", 0, 0, 0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "datatype.is_in_slow_loading", datatype_is_in_slow_loading, "allow-loading", 0,
+                                  0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnUnload(RedisModuleCtx *ctx) {
+int RedisModule_OnUnload(RedisModuleCtx *ctx)
+{
     REDISMODULE_NOT_USED(ctx);
     if (datatype) {
         RedisModule_Free(datatype);

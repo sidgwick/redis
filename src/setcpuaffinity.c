@@ -26,15 +26,15 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #ifdef __linux__
 #include <sched.h>
 #endif
 #ifdef __FreeBSD__
-#include <sys/param.h>
 #include <sys/cpuset.h>
+#include <sys/param.h>
 #endif
 #ifdef __DragonFly__
 #include <pthread.h>
@@ -47,7 +47,8 @@
 #include "config.h"
 
 #ifdef USE_SETCPUAFFINITY
-static const char *next_token(const char *q,  int sep) {
+static const char *next_token(const char *q, int sep)
+{
     if (q)
         q = strchr(q, sep);
     if (q)
@@ -56,7 +57,8 @@ static const char *next_token(const char *q,  int sep) {
     return q;
 }
 
-static int next_num(const char *str, char **end, int *result) {
+static int next_num(const char *str, char **end, int *result)
+{
     if (!str || *str == '\0' || !isdigit(*str))
         return -1;
 
@@ -70,13 +72,14 @@ static int next_num(const char *str, char **end, int *result) {
 /* set current thread cpu affinity to cpu list, this function works like
  * taskset command (actually cpulist parsing logic reference to util-linux).
  * example of this function: "0,2,3", "0,2-3", "0-20:2". */
-void setcpuaffinity(const char *cpulist) {
+void setcpuaffinity(const char *cpulist)
+{
     const char *p, *q;
     char *end = NULL;
 #ifdef __linux__
     cpu_set_t cpuset;
 #endif
-#if defined (__FreeBSD__) || defined(__DragonFly__)
+#if defined(__FreeBSD__) || defined(__DragonFly__)
     cpuset_t cpuset;
 #endif
 #ifdef __NetBSD__

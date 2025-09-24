@@ -46,15 +46,18 @@ monotonic_clock_type monotonicGetType(void);
  *     elapsedStart(&myTimer);
  *     while (elapsedMs(myTimer) < 10) {} // loops for 10ms
  */
-static inline void elapsedStart(monotime *start_time) {
+static inline void elapsedStart(monotime *start_time)
+{
     *start_time = getMonotonicUs();
 }
 
-static inline uint64_t elapsedUs(monotime start_time) {
+static inline uint64_t elapsedUs(monotime start_time)
+{
     return getMonotonicUs() - start_time;
 }
 
-static inline uint64_t elapsedMs(monotime start_time) {
+static inline uint64_t elapsedMs(monotime start_time)
+{
     return elapsedUs(start_time) / 1000;
 }
 

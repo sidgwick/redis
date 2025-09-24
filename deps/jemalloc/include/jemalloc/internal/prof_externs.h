@@ -7,20 +7,20 @@
 extern bool opt_prof;
 extern bool opt_prof_active;
 extern bool opt_prof_thread_active_init;
-extern size_t opt_lg_prof_sample;    /* Mean bytes between samples. */
+extern size_t opt_lg_prof_sample; /* Mean bytes between samples. */
 extern ssize_t opt_lg_prof_interval; /* lg(prof_interval). */
-extern bool opt_prof_gdump;          /* High-water memory dumping. */
-extern bool opt_prof_final;          /* Final profile dumping. */
-extern bool opt_prof_leak;           /* Dump leak summary at exit. */
-extern bool opt_prof_leak_error;     /* Exit with error code if memory leaked */
-extern bool opt_prof_accum;          /* Report cumulative bytes. */
-extern bool opt_prof_log;            /* Turn logging on at boot. */
+extern bool opt_prof_gdump; /* High-water memory dumping. */
+extern bool opt_prof_final; /* Final profile dumping. */
+extern bool opt_prof_leak; /* Dump leak summary at exit. */
+extern bool opt_prof_leak_error; /* Exit with error code if memory leaked */
+extern bool opt_prof_accum; /* Report cumulative bytes. */
+extern bool opt_prof_log; /* Turn logging on at boot. */
 extern char opt_prof_prefix[
-    /* Minimize memory bloat for non-prof builds. */
+/* Minimize memory bloat for non-prof builds. */
 #ifdef JEMALLOC_PROF
-    PATH_MAX +
+  PATH_MAX +
 #endif
-    1];
+  1];
 extern bool opt_prof_unbias;
 
 /* For recording recent allocations */
@@ -60,8 +60,8 @@ prof_tdata_t *prof_tdata_init(tsd_t *tsd);
 prof_tdata_t *prof_tdata_reinit(tsd_t *tsd, prof_tdata_t *tdata);
 
 void prof_alloc_rollback(tsd_t *tsd, prof_tctx_t *tctx);
-void prof_malloc_sample_object(tsd_t *tsd, const void *ptr, size_t size,
-    size_t usize, prof_tctx_t *tctx);
+void prof_malloc_sample_object(
+  tsd_t *tsd, const void *ptr, size_t size, size_t usize, prof_tctx_t *tctx);
 void prof_free_sampled_object(tsd_t *tsd, size_t usize, prof_info_t *prof_info);
 prof_tctx_t *prof_tctx_create(tsd_t *tsd);
 void prof_idump(tsdn_t *tsdn);

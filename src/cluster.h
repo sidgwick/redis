@@ -19,12 +19,12 @@
  * Redis cluster exported API.
  *----------------------------------------------------------------------------*/
 
-#define CLUSTER_SLOT_MASK_BITS 14 /* Number of bits used for slot id. */
-#define CLUSTER_SLOTS (1<<CLUSTER_SLOT_MASK_BITS) /* Total number of slots in cluster mode, which is 16384. */
+#define CLUSTER_SLOT_MASK_BITS 14                   /* Number of bits used for slot id. */
+#define CLUSTER_SLOTS (1 << CLUSTER_SLOT_MASK_BITS) /* Total number of slots in cluster mode, which is 16384. */
 #define CLUSTER_SLOT_MASK ((unsigned long long)(CLUSTER_SLOTS - 1)) /* Bit mask for slot id stored in LSB. */
-#define CLUSTER_OK 0            /* Everything looks ok */
-#define CLUSTER_FAIL 1          /* The cluster can't work */
-#define CLUSTER_NAMELEN 40      /* sha1 hex length */
+#define CLUSTER_OK 0                                                /* Everything looks ok */
+#define CLUSTER_FAIL 1                                              /* The cluster can't work */
+#define CLUSTER_NAMELEN 40                                          /* sha1 hex length */
 
 /* Redirection errors returned by getNodeByQuery(). */
 #define CLUSTER_REDIR_NONE 0          /* Node can serve the request. */
@@ -43,8 +43,8 @@ struct clusterState;
  * features to be enabled. Useful when implementing a different distributed
  * system on top of Redis Cluster message bus, using modules. */
 #define CLUSTER_MODULE_FLAG_NONE 0
-#define CLUSTER_MODULE_FLAG_NO_FAILOVER (1<<1)
-#define CLUSTER_MODULE_FLAG_NO_REDIRECTION (1<<2)
+#define CLUSTER_MODULE_FLAG_NO_FAILOVER (1 << 1)
+#define CLUSTER_MODULE_FLAG_NO_REDIRECTION (1 << 2)
 
 /* ---------------------- API exported outside cluster.c -------------------- */
 
@@ -54,25 +54,30 @@ struct clusterState;
  * However, if the key contains the {...} pattern, only the part between
  * { and } is hashed. This may be useful in the future to force certain
  * keys to be in the same node (assuming no resharding is in progress). */
-static inline unsigned int keyHashSlot(char *key, int keylen) {
+static inline unsigned int keyHashSlot(char *key, int keylen)
+{
     int s, e; /* start-end indexes of { and } */
 
     for (s = 0; s < keylen; s++)
-        if (key[s] == '{') break;
+        if (key[s] == '{')
+            break;
 
     /* No '{' ? Hash the whole key. This is the base case. */
-    if (likely(s == keylen)) return crc16(key,keylen) & 0x3FFF;
+    if (likely(s == keylen))
+        return crc16(key, keylen) & 0x3FFF;
 
     /* '{' found? Check if we have the corresponding '}'. */
-    for (e = s+1; e < keylen; e++)
-        if (key[e] == '}') break;
+    for (e = s + 1; e < keylen; e++)
+        if (key[e] == '}')
+            break;
 
     /* No '}' or nothing between {} ? Hash the whole key. */
-    if (e == keylen || e == s+1) return crc16(key,keylen) & 0x3FFF;
+    if (e == keylen || e == s + 1)
+        return crc16(key, keylen) & 0x3FFF;
 
     /* If we are here there is both a { and a } on its right. Hash
      * what is in the middle between { and }. */
-    return crc16(key+s+1,e-s-1) & 0x3FFF;
+    return crc16(key + s + 1, e - s - 1) & 0x3FFF;
 }
 
 /* functions requiring mechanism specific implementations */
@@ -82,7 +87,8 @@ void clusterCron(void);
 void clusterBeforeSleep(void);
 int verifyClusterConfigWithData(void);
 
-int clusterSendModuleMessageToTarget(const char *target, uint64_t module_id, uint8_t type, const char *payload, uint32_t len);
+int clusterSendModuleMessageToTarget(const char *target, uint64_t module_id, uint8_t type, const char *payload,
+                                     uint32_t len);
 
 void clusterUpdateMyselfFlags(void);
 void clusterUpdateMyselfIp(void);
@@ -102,13 +108,13 @@ int handleDebugClusterCommand(client *c);
 const char **clusterDebugCommandExtendedHelp(void);
 /* handle implementation specific cluster commands. Return 1 if handled, 0 otherwise. */
 int clusterCommandSpecial(client *c);
-const char** clusterCommandExtendedHelp(void);
+const char **clusterCommandExtendedHelp(void);
 
 int clusterAllowFailoverCmd(client *c);
 void clusterPromoteSelfToMaster(void);
 int clusterManualFailoverTimeLimit(void);
 
-void clusterCommandSlots(client * c);
+void clusterCommandSlots(client *c);
 void clusterCommandMyId(client *c);
 void clusterCommandMyShardId(client *c);
 
@@ -121,7 +127,7 @@ clusterNode *getMyClusterNode(void);
 char *getMyClusterId(void);
 int getClusterSize(void);
 int getMyShardSlotCount(void);
-int clusterNodePending(clusterNode  *node);
+int clusterNodePending(clusterNode *node);
 char **getClusterNodesList(size_t *numnodes);
 int clusterNodeIsMaster(clusterNode *n);
 char *clusterNodeIp(clusterNode *node);
@@ -148,7 +154,8 @@ unsigned int countKeysInSlot(unsigned int slot);
 int getSlotOrReply(client *c, robj *o);
 
 /* functions with shared implementations */
-clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, int argc, int *hashslot, uint64_t cmd_flags, int *error_code);
+clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, int argc, int *hashslot,
+                            uint64_t cmd_flags, int *error_code);
 int clusterRedirectBlockedClientIfNeeded(client *c);
 void clusterRedirectClient(client *c, clusterNode *n, int hashslot, int error_code);
 void migrateCloseTimedoutSockets(void);

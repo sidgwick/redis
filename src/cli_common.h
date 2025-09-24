@@ -18,11 +18,10 @@ typedef struct cliSSLconfig {
     /* Private key file to authenticate with, or NULL */
     char *key;
     /* Preferred cipher list, or NULL (applies only to <= TLSv1.2) */
-    char* ciphers;
+    char *ciphers;
     /* Preferred ciphersuites list, or NULL (applies only to TLSv1.3) */
-    char* ciphersuites;
+    char *ciphersuites;
 } cliSSLconfig;
-
 
 /* server connection information object, used to describe an ip:port pair, db num user input, and user:pass. */
 typedef struct cliConnInfo {
@@ -41,11 +40,11 @@ int cliSecureInit(void);
 
 sds readArgFromStdin(void);
 
-sds *getSdsArrayFromArgv(int argc,char **argv, int quoted);
+sds *getSdsArrayFromArgv(int argc, char **argv, int quoted);
 
 sds unquoteCString(char *str);
 
-void parseRedisUri(const char *uri, const char* tool_name, cliConnInfo *connInfo, int *tls_flag);
+void parseRedisUri(const char *uri, const char *tool_name, cliConnInfo *connInfo, int *tls_flag);
 
 void freeCliConnInfo(cliConnInfo connInfo);
 

@@ -22,8 +22,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdlib.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 /* Size: Total bytes allocated to *buf
  * Length: String length, excluding optional NULL terminator.

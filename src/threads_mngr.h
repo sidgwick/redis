@@ -15,14 +15,14 @@
 #include <unistd.h>
 
 /** This is an API to invoke callback on a list of threads using a user defined signal handler.
- * NOTE: This is API is only supported only in linux systems. 
+ * NOTE: This is API is only supported only in linux systems.
  * Calling the functions below on any other system does nothing.
 */
 
 #define THREADS_SIGNAL SIGUSR2
 
 /* Callback signature */
-typedef void(*run_on_thread_cb)(void);
+typedef void (*run_on_thread_cb)(void);
 
 /* Register the process to THREADS_SIGNAL */
 void ThreadsManager_init(void);

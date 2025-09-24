@@ -44,8 +44,9 @@ static exprtoken *jsonParseValueToken(const char **p, const char *end);
 
 /* Similar to ctype.h isdigit() but covers the whole JSON number charset,
  * including exp form. */
-static int jsonIsNumberChar(int c) {
-    return isdigit(c) || c=='-' || c=='+' || c=='.' || c=='e' || c=='E';
+static int jsonIsNumberChar(int c)
+{
+    return isdigit(c) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E';
 }
 
 /* ========================== Fast skipping of JSON =========================
@@ -58,13 +59,17 @@ static int jsonIsNumberChar(int c) {
  * ========================================================================== */
 
 /* Advance *p consuming all the spaces. */
-static inline void jsonSkipWhiteSpaces(const char **p, const char *end) {
-    while (*p < end && isspace((unsigned char)**p)) (*p)++;
+static inline void jsonSkipWhiteSpaces(const char **p, const char *end)
+{
+    while (*p < end && isspace((unsigned char)**p))
+        (*p)++;
 }
 
 /* Advance *p past a JSON string. Returns 1 on success, 0 on error. */
-static int jsonSkipString(const char **p, const char *end) {
-    if (*p >= end || **p != '"') return 0;
+static int jsonSkipString(const char **p, const char *end)
+{
+    if (*p >= end || **p != '"')
+        return 0;
     (*p)++; /* Skip opening quote. */
     while (*p < end) {
         if (**p == '\\') {
@@ -83,8 +88,8 @@ static int jsonSkipString(const char **p, const char *end) {
 /* Skip an array or object generically using depth counter.
  * Opener and closer tells the function how the aggregated
  * data type starts/stops, basically [] or {}. */
-static int jsonSkipBracketed(const char **p, const char *end,
-                             char opener, char closer) {
+static int jsonSkipBracketed(const char **p, const char *end, char opener, char closer)
+{
     int depth = 1;
     (*p)++; /* Skip opener. */
 
@@ -125,10 +130,15 @@ static int jsonSkipBracketed(const char **p, const char *end,
 
 /* Skip a single JSON literal (true, null, ...) starting at *p.
  * Returns 1 on success, 0 on failure. */
-static int jsonSkipLiteral(const char **p, const char *end, const char *lit) {
+static int jsonSkipLiteral(const char **p, const char *end, const char *lit)
+{
     size_t l = strlen(lit);
-    if (*p + l > end) return 0;
-    if (strncmp(*p, lit, l) == 0) { *p += l; return 1; }
+    if (*p + l > end)
+        return 0;
+    if (strncmp(*p, lit, l) == 0) {
+        *p += l;
+        return 1;
+    }
     return 0;
 }
 
@@ -137,24 +147,35 @@ static int jsonSkipLiteral(const char **p, const char *end, const char *lit) {
  *
  * Note: More robust number skipping might check validity,
  * but for skipping, just consuming plausible characters is enough. */
-static int jsonSkipNumber(const char **p, const char *end) {
+static int jsonSkipNumber(const char **p, const char *end)
+{
     const char *num_start = *p;
-    while (*p < end && jsonIsNumberChar(**p)) (*p)++;
+    while (*p < end && jsonIsNumberChar(**p))
+        (*p)++;
     return *p > num_start; // Any progress made? Otherwise no number found.
 }
 
 /* Skip any JSON value. 1 = success, 0 = error. */
-static int jsonSkipValue(const char **p, const char *end) {
+static int jsonSkipValue(const char **p, const char *end)
+{
     jsonSkipWhiteSpaces(p, end);
-    if (*p >= end) return 0;
+    if (*p >= end)
+        return 0;
     switch (**p) {
-    case '"': return jsonSkipString(p, end);
-    case '{':  return jsonSkipBracketed(p, end, '{', '}');
-    case '[':  return jsonSkipBracketed(p, end, '[', ']');
-    case 't':  return jsonSkipLiteral(p, end, "true");
-    case 'f':  return jsonSkipLiteral(p, end, "false");
-    case 'n':  return jsonSkipLiteral(p, end, "null");
-    default: return jsonSkipNumber(p, end);
+    case '"':
+        return jsonSkipString(p, end);
+    case '{':
+        return jsonSkipBracketed(p, end, '{', '}');
+    case '[':
+        return jsonSkipBracketed(p, end, '[', ']');
+    case 't':
+        return jsonSkipLiteral(p, end, "true");
+    case 'f':
+        return jsonSkipLiteral(p, end, "false");
+    case 'n':
+        return jsonSkipLiteral(p, end, "null");
+    default:
+        return jsonSkipNumber(p, end);
     }
 }
 
@@ -163,45 +184,85 @@ static int jsonSkipValue(const char **p, const char *end) {
  * expression token structure.
  * ========================================================================== */
 
-static exprtoken *jsonParseStringToken(const char **p, const char *end) {
-    if (*p >= end || **p != '"') return NULL;
+static exprtoken *jsonParseStringToken(const char **p, const char *end)
+{
+    if (*p >= end || **p != '"')
+        return NULL;
     const char *start = ++(*p);
-    int esc = 0; size_t len = 0; int has_esc = 0;
+    int esc = 0;
+    size_t len = 0;
+    int has_esc = 0;
     const char *q = *p;
     while (q < end) {
-        if (esc) { esc = 0; q++; len++; has_esc = 1; continue; }
-        if (*q == '\\') { esc = 1; q++; continue; }
-        if (*q == '"') break;
-        q++; len++;
+        if (esc) {
+            esc = 0;
+            q++;
+            len++;
+            has_esc = 1;
+            continue;
+        }
+        if (*q == '\\') {
+            esc = 1;
+            q++;
+            continue;
+        }
+        if (*q == '"')
+            break;
+        q++;
+        len++;
     }
-    if (q >= end || *q != '"') return NULL; // Unterminated string
+    if (q >= end || *q != '"')
+        return NULL; // Unterminated string
     exprtoken *t = exprNewToken(EXPR_TOKEN_STR);
 
     if (!has_esc) {
         // No escapes, we can point directly into the original JSON string.
-        t->str.start = (char*)start; t->str.len = len; t->str.heapstr = NULL;
+        t->str.start = (char *)start;
+        t->str.len = len;
+        t->str.heapstr = NULL;
     } else {
         // Escapes present, need to allocate and copy/process escapes.
         char *dst = RedisModule_Alloc(len + 1);
 
-        t->str.start = t->str.heapstr = dst; t->str.len = len;
-        const char *r = start; esc = 0;
+        t->str.start = t->str.heapstr = dst;
+        t->str.len = len;
+        const char *r = start;
+        esc = 0;
         while (r < q) {
             if (esc) {
                 switch (*r) {
                 // Supported escapes from Goal 3.
-                case 'n': *dst='\n'; break;
-                case 'r': *dst='\r'; break;
-                case 't': *dst='\t'; break;
-                case '\\': *dst='\\'; break;
-                case '"': *dst='\"'; break;
+                case 'n':
+                    *dst = '\n';
+                    break;
+                case 'r':
+                    *dst = '\r';
+                    break;
+                case 't':
+                    *dst = '\t';
+                    break;
+                case '\\':
+                    *dst = '\\';
+                    break;
+                case '"':
+                    *dst = '\"';
+                    break;
                 // Escapes (like \uXXXX, \b, \f) are not supported for now,
                 // we just copy them verbatim.
-                default: *dst=*r; break;
+                default:
+                    *dst = *r;
+                    break;
                 }
-                dst++; esc = 0; r++; continue;
+                dst++;
+                esc = 0;
+                r++;
+                continue;
             }
-            if (*r == '\\') { esc = 1; r++; continue; }
+            if (*r == '\\') {
+                esc = 1;
+                r++;
+                continue;
+            }
             *dst++ = *r++;
         }
         *dst = '\0'; // Null-terminate the allocated string.
@@ -210,26 +271,29 @@ static exprtoken *jsonParseStringToken(const char **p, const char *end) {
     return t;
 }
 
-static exprtoken *jsonParseNumberToken(const char **p, const char *end) {
+static exprtoken *jsonParseNumberToken(const char **p, const char *end)
+{
     // Use a buffer to extract the number literal for parsing with strtod().
-    char buf[256]; int idx = 0;
+    char buf[256];
+    int idx = 0;
     const char *start = *p; // For strtod partial failures check.
 
     // Copy potential number characters to buffer.
-    while (*p < end && idx < (int)sizeof(buf)-1 && jsonIsNumberChar(**p)) {
+    while (*p < end && idx < (int)sizeof(buf) - 1 && jsonIsNumberChar(**p)) {
         buf[idx++] = **p;
         (*p)++;
     }
-    buf[idx]='\0'; // Null-terminate buffer.
+    buf[idx] = '\0'; // Null-terminate buffer.
 
-    if (idx==0) return NULL; // No number characters found.
+    if (idx == 0)
+        return NULL; // No number characters found.
 
     char *ep; // End pointer for strtod validation.
     double v = strtod(buf, &ep);
 
     /* Check if strtod() consumed the entire buffer content.
      * If not, the number format was invalid. */
-    if (*ep!='\0') {
+    if (*ep != '\0') {
         // strtod() failed; rewind p to the start and return NULL
         *p = start;
         return NULL;
@@ -241,21 +305,23 @@ static exprtoken *jsonParseNumberToken(const char **p, const char *end) {
     return t;
 }
 
-static exprtoken *jsonParseLiteralToken(const char **p, const char *end, const char *lit, int type, double num) {
+static exprtoken *jsonParseLiteralToken(const char **p, const char *end, const char *lit, int type, double num)
+{
     size_t l = strlen(lit);
 
     // Ensure we don't read past 'end'.
-    if ((*p + l) > end) return NULL;
+    if ((*p + l) > end)
+        return NULL;
 
-    if (strncmp(*p, lit, l) != 0) return NULL; // Literal doesn't match.
+    if (strncmp(*p, lit, l) != 0)
+        return NULL; // Literal doesn't match.
 
     // Check that the character *after* the literal is a valid JSON delimiter
     // (whitespace, comma, closing bracket/brace, or end of input)
     // This prevents matching "trueblabla" as "true".
     if ((*p + l) < end) {
         char next_char = *(*p + l);
-        if (!isspace((unsigned char)next_char) && next_char!=',' &&
-            next_char!=']' && next_char!='}') {
+        if (!isspace((unsigned char)next_char) && next_char != ',' && next_char != ']' && next_char != '}') {
             return NULL; // Invalid character following literal.
         }
     }
@@ -267,13 +333,17 @@ static exprtoken *jsonParseLiteralToken(const char **p, const char *end, const c
     return t;
 }
 
-static exprtoken *jsonParseArrayToken(const char **p, const char *end) {
-    if (*p >= end || **p != '[') return NULL;
+static exprtoken *jsonParseArrayToken(const char **p, const char *end)
+{
+    if (*p >= end || **p != '[')
+        return NULL;
     (*p)++; // Skip '['.
-    jsonSkipWhiteSpaces(p,end);
+    jsonSkipWhiteSpaces(p, end);
 
     exprtoken *t = exprNewToken(EXPR_TOKEN_TUPLE);
-    t->tuple.len = 0; t->tuple.ele = NULL; size_t alloc = 0;
+    t->tuple.len = 0;
+    t->tuple.ele = NULL;
+    size_t alloc = 0;
 
     // Handle empty array [].
     if (*p < end && **p == ']') {
@@ -283,7 +353,7 @@ static exprtoken *jsonParseArrayToken(const char **p, const char *end) {
 
     // Parse array elements.
     while (1) {
-        exprtoken *ele = jsonParseValueToken(p,end);
+        exprtoken *ele = jsonParseValueToken(p, end);
         if (!ele) {
             exprTokenRelease(t); // Clean up partially built array token.
             return NULL;
@@ -298,15 +368,14 @@ static exprtoken *jsonParseArrayToken(const char **p, const char *end) {
                 exprTokenRelease(t);
                 return NULL;
             }
-            exprtoken **newele = RedisModule_Realloc(t->tuple.ele,
-                                           sizeof(exprtoken*)*newsize);
+            exprtoken **newele = RedisModule_Realloc(t->tuple.ele, sizeof(exprtoken *) * newsize);
             t->tuple.ele = newele;
             alloc = newsize;
         }
         t->tuple.ele[t->tuple.len++] = ele; // Add element.
 
-        jsonSkipWhiteSpaces(p,end);
-        if (*p>=end) {
+        jsonSkipWhiteSpaces(p, end);
+        if (*p >= end) {
             // Unterminated array. Note that this check is crucial because
             // previous value parsed may seek 'p' to 'end'.
             exprTokenRelease(t);
@@ -315,11 +384,11 @@ static exprtoken *jsonParseArrayToken(const char **p, const char *end) {
 
         // Check for comma (more elements) or closing bracket.
         if (**p == ',') {
-            (*p)++; // Skip ','
-            jsonSkipWhiteSpaces(p,end); // Skip whitespace before next element
-            continue; // Parse next element
+            (*p)++;                      // Skip ','
+            jsonSkipWhiteSpaces(p, end); // Skip whitespace before next element
+            continue;                    // Parse next element
         } else if (**p == ']') {
-            (*p)++; // Skip ']'
+            (*p)++;   // Skip ']'
             return t; // End of array
         } else {
             // Unexpected character (not ',' or ']')
@@ -330,21 +399,29 @@ static exprtoken *jsonParseArrayToken(const char **p, const char *end) {
 }
 
 /* Turn a JSON value into an expr token. */
-static exprtoken *jsonParseValueToken(const char **p, const char *end) {
-    jsonSkipWhiteSpaces(p,end);
-    if (*p >= end) return NULL;
+static exprtoken *jsonParseValueToken(const char **p, const char *end)
+{
+    jsonSkipWhiteSpaces(p, end);
+    if (*p >= end)
+        return NULL;
 
     switch (**p) {
-    case '"': return jsonParseStringToken(p,end);
-    case '[':  return jsonParseArrayToken(p,end);
-    case '{':  return NULL; // No nested elements support for now.
-    case 't':  return jsonParseLiteralToken(p,end,"true",EXPR_TOKEN_NUM,1);
-    case 'f':  return jsonParseLiteralToken(p,end,"false",EXPR_TOKEN_NUM,0);
-    case 'n':  return jsonParseLiteralToken(p,end,"null",EXPR_TOKEN_NULL,0);
+    case '"':
+        return jsonParseStringToken(p, end);
+    case '[':
+        return jsonParseArrayToken(p, end);
+    case '{':
+        return NULL; // No nested elements support for now.
+    case 't':
+        return jsonParseLiteralToken(p, end, "true", EXPR_TOKEN_NUM, 1);
+    case 'f':
+        return jsonParseLiteralToken(p, end, "false", EXPR_TOKEN_NUM, 0);
+    case 'n':
+        return jsonParseLiteralToken(p, end, "null", EXPR_TOKEN_NULL, 0);
     default:
         // Check if it starts like a number.
-        if (isdigit((unsigned char)**p) || **p=='-' || **p=='+') {
-             return jsonParseNumberToken(p,end);
+        if (isdigit((unsigned char)**p) || **p == '-' || **p == '+') {
+            return jsonParseNumberToken(p, end);
         }
         // Anything else is an unsupported type or malformed JSON.
         return NULL;
@@ -357,21 +434,25 @@ static exprtoken *jsonParseValueToken(const char **p, const char *end) {
  * Returns pointer to the first char of the value, or NULL if not found/error.
  * This function does not perform any allocation and is optimized to seek
  * the specified *toplevel* filed as fast as possible. */
-static const char *jsonSeekField(const char *json, const char *end,
-                                 const char *field, size_t flen) {
+static const char *jsonSeekField(const char *json, const char *end, const char *field, size_t flen)
+{
     const char *p = json;
-    jsonSkipWhiteSpaces(&p,end);
-    if (p >= end || *p != '{') return NULL; // Must start with '{'.
-    p++; // skip '{'.
+    jsonSkipWhiteSpaces(&p, end);
+    if (p >= end || *p != '{')
+        return NULL; // Must start with '{'.
+    p++;             // skip '{'.
 
     while (1) {
-        jsonSkipWhiteSpaces(&p,end);
-        if (p >= end) return NULL; // Reached end within object.
+        jsonSkipWhiteSpaces(&p, end);
+        if (p >= end)
+            return NULL; // Reached end within object.
 
-        if (*p == '}') return NULL; // End of object, field not found.
+        if (*p == '}')
+            return NULL; // End of object, field not found.
 
         // Expecting a key (string).
-        if (*p != '"') return NULL; // Key must be a string.
+        if (*p != '"')
+            return NULL; // Key must be a string.
 
         // --- Key Matching using jsonSkipString ---
         const char *key_start = p + 1; // Start of key content.
@@ -395,26 +476,29 @@ static const char *jsonSeekField(const char *json, const char *end,
         p = key_end_p;
 
         // Now we expect to find a ":" followed by a value.
-        jsonSkipWhiteSpaces(&p,end);
-        if (p>=end || *p!=':') return NULL; // Expect ':' after key
-        p++; // Skip ':'.
+        jsonSkipWhiteSpaces(&p, end);
+        if (p >= end || *p != ':')
+            return NULL; // Expect ':' after key
+        p++;             // Skip ':'.
 
-	// Seek value.
-        jsonSkipWhiteSpaces(&p,end);
-        if (p>=end) return NULL; // Expect value after ':'
+        // Seek value.
+        jsonSkipWhiteSpaces(&p, end);
+        if (p >= end)
+            return NULL; // Expect value after ':'
 
         if (match) {
             // Found the matching key, p now points to the start of the value.
             return p;
         } else {
             // Key didn't match, skip the corresponding value.
-            if (!jsonSkipValue(&p,end)) return NULL; // Syntax error.
+            if (!jsonSkipValue(&p, end))
+                return NULL; // Syntax error.
         }
 
-
         // Look for comma or a closing brace.
-        jsonSkipWhiteSpaces(&p,end);
-        if (p>=end) return NULL; // Reached end after value.
+        jsonSkipWhiteSpaces(&p, end);
+        if (p >= end)
+            return NULL; // Reached end after value.
 
         if (*p == ',') {
             p++; // Skip comma, continue loop to find next key.
@@ -428,14 +512,14 @@ static const char *jsonSeekField(const char *json, const char *end,
 
 /* This is the only real API that this file conceptually exports (it is
  * inlined, actually). */
-exprtoken *jsonExtractField(const char *json, size_t json_len,
-                            const char *field, size_t field_len)
+exprtoken *jsonExtractField(const char *json, size_t json_len, const char *field, size_t field_len)
 {
     const char *end = json + json_len;
-    const char *valptr = jsonSeekField(json,end,field,field_len);
-    if (!valptr) return NULL;
+    const char *valptr = jsonSeekField(json, end, field, field_len);
+    if (!valptr)
+        return NULL;
 
     /* Key found, valptr points to the start of the value.
      * Convert it into an expression token object. */
-    return jsonParseValueToken(&valptr,end);
+    return jsonParseValueToken(&valptr, end);
 }

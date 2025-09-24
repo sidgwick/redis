@@ -25,30 +25,30 @@
 /******************************************************************************/
 /* INTERNAL DEFINITIONS -- IGNORE */
 /******************************************************************************/
-#define PRNG_A_32	UINT32_C(1103515241)
-#define PRNG_C_32	UINT32_C(12347)
+#define PRNG_A_32 UINT32_C(1103515241)
+#define PRNG_C_32 UINT32_C(12347)
 
-#define PRNG_A_64	UINT64_C(6364136223846793005)
-#define PRNG_C_64	UINT64_C(1442695040888963407)
+#define PRNG_A_64 UINT64_C(6364136223846793005)
+#define PRNG_C_64 UINT64_C(1442695040888963407)
 
 JEMALLOC_ALWAYS_INLINE uint32_t
 prng_state_next_u32(uint32_t state) {
-	return (state * PRNG_A_32) + PRNG_C_32;
+    return (state * PRNG_A_32) + PRNG_C_32;
 }
 
 JEMALLOC_ALWAYS_INLINE uint64_t
 prng_state_next_u64(uint64_t state) {
-	return (state * PRNG_A_64) + PRNG_C_64;
+    return (state * PRNG_A_64) + PRNG_C_64;
 }
 
 JEMALLOC_ALWAYS_INLINE size_t
 prng_state_next_zu(size_t state) {
 #if LG_SIZEOF_PTR == 2
-	return (state * PRNG_A_32) + PRNG_C_32;
+    return (state * PRNG_A_32) + PRNG_C_32;
 #elif LG_SIZEOF_PTR == 3
-	return (state * PRNG_A_64) + PRNG_C_64;
+    return (state * PRNG_A_64) + PRNG_C_64;
 #else
-#error Unsupported pointer size
+#    error Unsupported pointer size
 #endif
 }
 
@@ -63,35 +63,35 @@ prng_state_next_zu(size_t state) {
 
 JEMALLOC_ALWAYS_INLINE uint32_t
 prng_lg_range_u32(uint32_t *state, unsigned lg_range) {
-	assert(lg_range > 0);
-	assert(lg_range <= 32);
+    assert(lg_range > 0);
+    assert(lg_range <= 32);
 
-	*state = prng_state_next_u32(*state);
-	uint32_t ret = *state >> (32 - lg_range);
+    *state = prng_state_next_u32(*state);
+    uint32_t ret = *state >> (32 - lg_range);
 
-	return ret;
+    return ret;
 }
 
 JEMALLOC_ALWAYS_INLINE uint64_t
 prng_lg_range_u64(uint64_t *state, unsigned lg_range) {
-	assert(lg_range > 0);
-	assert(lg_range <= 64);
+    assert(lg_range > 0);
+    assert(lg_range <= 64);
 
-	*state = prng_state_next_u64(*state);
-	uint64_t ret = *state >> (64 - lg_range);
+    *state = prng_state_next_u64(*state);
+    uint64_t ret = *state >> (64 - lg_range);
 
-	return ret;
+    return ret;
 }
 
 JEMALLOC_ALWAYS_INLINE size_t
 prng_lg_range_zu(size_t *state, unsigned lg_range) {
-	assert(lg_range > 0);
-	assert(lg_range <= ZU(1) << (3 + LG_SIZEOF_PTR));
+    assert(lg_range > 0);
+    assert(lg_range <= ZU(1) << (3 + LG_SIZEOF_PTR));
 
-	*state = prng_state_next_zu(*state);
-	size_t ret = *state >> ((ZU(1) << (3 + LG_SIZEOF_PTR)) - lg_range);
+    *state = prng_state_next_zu(*state);
+    size_t ret = *state >> ((ZU(1) << (3 + LG_SIZEOF_PTR)) - lg_range);
 
-	return ret;
+    return ret;
 }
 
 /*
@@ -101,68 +101,68 @@ prng_lg_range_zu(size_t *state, unsigned lg_range) {
 
 JEMALLOC_ALWAYS_INLINE uint32_t
 prng_range_u32(uint32_t *state, uint32_t range) {
-	assert(range != 0);
-	/*
-	 * If range were 1, lg_range would be 0, so the shift in
-	 * prng_lg_range_u32 would be a shift of a 32-bit variable by 32 bits,
-	 * which is UB.  Just handle this case as a one-off.
-	 */
-	if (range == 1) {
-		return 0;
-	}
+    assert(range != 0);
+    /*
+     * If range were 1, lg_range would be 0, so the shift in
+     * prng_lg_range_u32 would be a shift of a 32-bit variable by 32 bits,
+     * which is UB.  Just handle this case as a one-off.
+     */
+    if (range == 1) {
+        return 0;
+    }
 
-	/* Compute the ceiling of lg(range). */
-	unsigned lg_range = ffs_u32(pow2_ceil_u32(range));
+    /* Compute the ceiling of lg(range). */
+    unsigned lg_range = ffs_u32(pow2_ceil_u32(range));
 
-	/* Generate a result in [0..range) via repeated trial. */
-	uint32_t ret;
-	do {
-		ret = prng_lg_range_u32(state, lg_range);
-	} while (ret >= range);
+    /* Generate a result in [0..range) via repeated trial. */
+    uint32_t ret;
+    do {
+        ret = prng_lg_range_u32(state, lg_range);
+    } while (ret >= range);
 
-	return ret;
+    return ret;
 }
 
 JEMALLOC_ALWAYS_INLINE uint64_t
 prng_range_u64(uint64_t *state, uint64_t range) {
-	assert(range != 0);
+    assert(range != 0);
 
-	/* See the note in prng_range_u32. */
-	if (range == 1) {
-		return 0;
-	}
+    /* See the note in prng_range_u32. */
+    if (range == 1) {
+        return 0;
+    }
 
-	/* Compute the ceiling of lg(range). */
-	unsigned lg_range = ffs_u64(pow2_ceil_u64(range));
+    /* Compute the ceiling of lg(range). */
+    unsigned lg_range = ffs_u64(pow2_ceil_u64(range));
 
-	/* Generate a result in [0..range) via repeated trial. */
-	uint64_t ret;
-	do {
-		ret = prng_lg_range_u64(state, lg_range);
-	} while (ret >= range);
+    /* Generate a result in [0..range) via repeated trial. */
+    uint64_t ret;
+    do {
+        ret = prng_lg_range_u64(state, lg_range);
+    } while (ret >= range);
 
-	return ret;
+    return ret;
 }
 
 JEMALLOC_ALWAYS_INLINE size_t
 prng_range_zu(size_t *state, size_t range) {
-	assert(range != 0);
+    assert(range != 0);
 
-	/* See the note in prng_range_u32. */
-	if (range == 1) {
-		return 0;
-	}
+    /* See the note in prng_range_u32. */
+    if (range == 1) {
+        return 0;
+    }
 
-	/* Compute the ceiling of lg(range). */
-	unsigned lg_range = ffs_u64(pow2_ceil_u64(range));
+    /* Compute the ceiling of lg(range). */
+    unsigned lg_range = ffs_u64(pow2_ceil_u64(range));
 
-	/* Generate a result in [0..range) via repeated trial. */
-	size_t ret;
-	do {
-		ret = prng_lg_range_zu(state, lg_range);
-	} while (ret >= range);
+    /* Generate a result in [0..range) via repeated trial. */
+    size_t ret;
+    do {
+        ret = prng_lg_range_zu(state, lg_range);
+    } while (ret >= range);
 
-	return ret;
+    return ret;
 }
 
 #endif /* JEMALLOC_INTERNAL_PRNG_H */

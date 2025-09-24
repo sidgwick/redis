@@ -47,48 +47,48 @@ typedef uint32_t fxp_t;
 
 static inline fxp_t
 fxp_add(fxp_t a, fxp_t b) {
-	return a + b;
+    return a + b;
 }
 
 static inline fxp_t
 fxp_sub(fxp_t a, fxp_t b) {
-	assert(a >= b);
-	return a - b;
+    assert(a >= b);
+    return a - b;
 }
 
 static inline fxp_t
 fxp_mul(fxp_t a, fxp_t b) {
-	uint64_t unshifted = (uint64_t)a * (uint64_t)b;
-	/*
-	 * Unshifted is (a.val * 2**16) * (b.val * 2**16)
-	 *   == (a.val * b.val) * 2**32, but we want
-	 * (a.val * b.val) * 2 ** 16.
-	 */
-	return (uint32_t)(unshifted >> 16);
+    uint64_t unshifted = (uint64_t)a * (uint64_t)b;
+    /*
+     * Unshifted is (a.val * 2**16) * (b.val * 2**16)
+     *   == (a.val * b.val) * 2**32, but we want
+     * (a.val * b.val) * 2 ** 16.
+     */
+    return (uint32_t)(unshifted >> 16);
 }
 
 static inline fxp_t
 fxp_div(fxp_t a, fxp_t b) {
-	assert(b != 0);
-	uint64_t unshifted = ((uint64_t)a << 32) / (uint64_t)b;
-	/*
-	 * Unshifted is (a.val * 2**16) * (2**32) / (b.val * 2**16)
-	 *   == (a.val / b.val) * (2 ** 32), which again corresponds to a right
-	 *   shift of 16.
-	 */
-	return (uint32_t)(unshifted >> 16);
+    assert(b != 0);
+    uint64_t unshifted = ((uint64_t)a << 32) / (uint64_t)b;
+    /*
+     * Unshifted is (a.val * 2**16) * (2**32) / (b.val * 2**16)
+     *   == (a.val / b.val) * (2 ** 32), which again corresponds to a right
+     *   shift of 16.
+     */
+    return (uint32_t)(unshifted >> 16);
 }
 
 static inline uint32_t
 fxp_round_down(fxp_t a) {
-	return a >> 16;
+    return a >> 16;
 }
 
 static inline uint32_t
 fxp_round_nearest(fxp_t a) {
-	uint32_t fractional_part = (a  & ((1U << 16) - 1));
-	uint32_t increment = (uint32_t)(fractional_part >= (1U << 15));
-	return (a >> 16) + increment;
+    uint32_t fractional_part = (a & ((1U << 16) - 1));
+    uint32_t increment = (uint32_t)(fractional_part >= (1U << 15));
+    return (a >> 16) + increment;
 }
 
 /*
@@ -97,23 +97,23 @@ fxp_round_nearest(fxp_t a) {
  */
 static inline size_t
 fxp_mul_frac(size_t x_orig, fxp_t frac) {
-	assert(frac <= (1U << 16));
-	/*
-	 * Work around an over-enthusiastic warning about type limits below (on
-	 * 32-bit platforms, a size_t is always less than 1ULL << 48).
-	 */
-	uint64_t x = (uint64_t)x_orig;
-	/*
-	 * If we can guarantee no overflow, multiply first before shifting, to
-	 * preserve some precision.  Otherwise, shift first and then multiply.
-	 * In the latter case, we only lose the low 16 bits of a 48-bit number,
-	 * so we're still accurate to within 1/2**32.
-	 */
-	if (x < (1ULL << 48)) {
-		return (size_t)((x * frac) >> 16);
-	} else {
-		return (size_t)((x >> 16) * (uint64_t)frac);
-	}
+    assert(frac <= (1U << 16));
+    /*
+     * Work around an over-enthusiastic warning about type limits below (on
+     * 32-bit platforms, a size_t is always less than 1ULL << 48).
+     */
+    uint64_t x = (uint64_t)x_orig;
+    /*
+     * If we can guarantee no overflow, multiply first before shifting, to
+     * preserve some precision.  Otherwise, shift first and then multiply.
+     * In the latter case, we only lose the low 16 bits of a 48-bit number,
+     * so we're still accurate to within 1/2**32.
+     */
+    if (x < (1ULL << 48)) {
+        return (size_t)((x * frac) >> 16);
+    } else {
+        return (size_t)((x >> 16) * (uint64_t)frac);
+    }
 }
 
 /*

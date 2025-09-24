@@ -14,7 +14,7 @@
 #include "../../src/redismodule.h"
 
 typedef struct {
-  int forceSingleThreadExec;
+    int forceSingleThreadExec;
 } VSConfig;
 
 extern VSConfig VSGlobalConfig;

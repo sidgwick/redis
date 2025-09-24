@@ -26,7 +26,7 @@
  * least-recently-inserted to the most-recently-inserted (older jobs processed
  * first).
  *
- * To let the creator of the job to be notified about the completion of the 
+ * To let the creator of the job to be notified about the completion of the
  * operation, it will need to submit additional dummy job, coined as
  * completion job request that will be written back eventually, by the
  * background thread, into completion job response queue. This notification
@@ -44,11 +44,11 @@
  * GNU Affero General Public License v3 (AGPLv3).
  */
 
-#include "server.h"
 #include "bio.h"
+#include "server.h"
 #include <fcntl.h>
 
-static char* bio_worker_title[] = {
+static char *bio_worker_title[] = {
     "bio_close_file",
     "bio_aof",
     "bio_lazy_free",
@@ -57,14 +57,8 @@ static char* bio_worker_title[] = {
 #define BIO_WORKER_NUM (sizeof(bio_worker_title) / sizeof(*bio_worker_title))
 
 static unsigned int bio_job_to_worker[] = {
-    [BIO_CLOSE_FILE] = 0,
-    [BIO_AOF_FSYNC] = 1,
-    [BIO_CLOSE_AOF] = 1,
-    [BIO_LAZY_FREE] = 2,
-    [BIO_COMP_RQ_CLOSE_FILE] = 0,
-    [BIO_COMP_RQ_AOF_FSYNC]  = 1,
-    [BIO_COMP_RQ_LAZY_FREE]  = 2
-};
+    [BIO_CLOSE_FILE] = 0,         [BIO_AOF_FSYNC] = 1,         [BIO_CLOSE_AOF] = 1,        [BIO_LAZY_FREE] = 2,
+    [BIO_COMP_RQ_CLOSE_FILE] = 0, [BIO_COMP_RQ_AOF_FSYNC] = 1, [BIO_COMP_RQ_LAZY_FREE] = 2};
 
 static pthread_t bio_threads[BIO_WORKER_NUM];
 static pthread_mutex_t bio_mutex[BIO_WORKER_NUM];
@@ -77,12 +71,12 @@ static unsigned long bio_jobs_counter[BIO_NUM_OPS] = {0};
  * thread will be triggered to read the list by signaling via writing to a pipe */
 static list *bio_comp_list;
 static pthread_mutex_t bio_mutex_comp;
-static int job_comp_pipe[2];   /* Pipe used to awake the event loop */
+static int job_comp_pipe[2]; /* Pipe used to awake the event loop */
 
 typedef struct bio_comp_item {
-    comp_fn *func;    /* callback after completion job will be processed  */
-    uint64_t arg;     /* user data to be passed to the function */
-    void *ptr;        /* user pointer to be passed to the function */
+    comp_fn *func; /* callback after completion job will be processed  */
+    uint64_t arg;  /* user data to be passed to the function */
+    void *ptr;     /* user pointer to be passed to the function */
 } bio_comp_item;
 
 /* This structure represents a background Job. It is only used locally to this
@@ -95,24 +89,24 @@ typedef union bio_job {
     /* Job specific arguments.*/
     struct {
         int type;
-        int fd; /* Fd for file based background jobs */
-        long long offset; /* A job-specific offset, if applicable */
-        unsigned need_fsync:1; /* A flag to indicate that a fsync is required before
+        int fd;                          /* Fd for file based background jobs */
+        long long offset;                /* A job-specific offset, if applicable */
+        unsigned need_fsync : 1;         /* A flag to indicate that a fsync is required before
                                 * the file is closed. */
-        unsigned need_reclaim_cache:1; /* A flag to indicate that reclaim cache is required before
+        unsigned need_reclaim_cache : 1; /* A flag to indicate that reclaim cache is required before
                                 * the file is closed. */
     } fd_args;
 
     struct {
         int type;
         lazy_free_fn *free_fn; /* Function that will free the provided arguments */
-        void *free_args[]; /* List of arguments to be passed to the free function */
+        void *free_args[];     /* List of arguments to be passed to the free function */
     } free_args;
     struct {
-        int type; /* header */
-        comp_fn *fn; /* callback. Handover to main thread to cb as notify for job completion */
+        int type;     /* header */
+        comp_fn *fn;  /* callback. Handover to main thread to cb as notify for job completion */
         uint64_t arg; /* callback arguments */
-        void *ptr; /* callback pointer */
+        void *ptr;    /* callback pointer */
     } comp_rq;
 } bio_job;
 
@@ -121,10 +115,11 @@ void bioPipeReadJobCompList(aeEventLoop *el, int fd, void *privdata, int mask);
 
 /* Make sure we have enough stack to perform all the things we do in the
  * main thread. */
-#define REDIS_THREAD_STACK_SIZE (1024*1024*4)
+#define REDIS_THREAD_STACK_SIZE (1024 * 1024 * 4)
 
 /* Initialize the background system, spawning the thread. */
-void bioInit(void) {
+void bioInit(void)
+{
     pthread_attr_t attr;
     pthread_t thread;
     size_t stacksize;
@@ -132,8 +127,8 @@ void bioInit(void) {
 
     /* Initialization of state vars and objects */
     for (j = 0; j < BIO_WORKER_NUM; j++) {
-        pthread_mutex_init(&bio_mutex[j],NULL);
-        pthread_cond_init(&bio_newjob_cond[j],NULL);
+        pthread_mutex_init(&bio_mutex[j], NULL);
+        pthread_cond_init(&bio_newjob_cond[j], NULL);
         bio_jobs[j] = listCreate();
     }
 
@@ -146,31 +141,31 @@ void bioInit(void) {
      * and we do not want to block not in the read nor in the write half.
      * Enable close-on-exec flag on pipes in case of the fork-exec system calls in
      * sentinels or redis servers. */
-    if (anetPipe(job_comp_pipe, O_CLOEXEC|O_NONBLOCK, O_CLOEXEC|O_NONBLOCK) == -1) {
-        serverLog(LL_WARNING,
-                  "Can't create the pipe for bio thread: %s", strerror(errno));
+    if (anetPipe(job_comp_pipe, O_CLOEXEC | O_NONBLOCK, O_CLOEXEC | O_NONBLOCK) == -1) {
+        serverLog(LL_WARNING, "Can't create the pipe for bio thread: %s", strerror(errno));
         exit(1);
     }
 
     /* Register a readable event for the pipe used to awake the event loop on job completion */
-    if (aeCreateFileEvent(server.el, job_comp_pipe[0], AE_READABLE,
-                          bioPipeReadJobCompList, NULL) == AE_ERR) {
+    if (aeCreateFileEvent(server.el, job_comp_pipe[0], AE_READABLE, bioPipeReadJobCompList, NULL) == AE_ERR) {
         serverPanic("Error registering the readable event for the bio pipe.");
     }
 
     /* Set the stack size as by default it may be small in some system */
     pthread_attr_init(&attr);
-    pthread_attr_getstacksize(&attr,&stacksize);
-    if (!stacksize) stacksize = 1; /* The world is full of Solaris Fixes */
-    while (stacksize < REDIS_THREAD_STACK_SIZE) stacksize *= 2;
+    pthread_attr_getstacksize(&attr, &stacksize);
+    if (!stacksize)
+        stacksize = 1; /* The world is full of Solaris Fixes */
+    while (stacksize < REDIS_THREAD_STACK_SIZE)
+        stacksize *= 2;
     pthread_attr_setstacksize(&attr, stacksize);
 
     /* Ready to spawn our threads. We use the single argument the thread
      * function accepts in order to pass the job ID the thread is
      * responsible for. */
     for (j = 0; j < BIO_WORKER_NUM; j++) {
-        void *arg = (void*)(unsigned long) j;
-        if (pthread_create(&thread,&attr,bioProcessBackgroundJobs,arg) != 0) {
+        void *arg = (void *)(unsigned long)j;
+        if (pthread_create(&thread, &attr, bioProcessBackgroundJobs, arg) != 0) {
             serverLog(LL_WARNING, "Fatal: Can't initialize Background Jobs. Error message: %s", strerror(errno));
             exit(1);
         }
@@ -178,17 +173,19 @@ void bioInit(void) {
     }
 }
 
-void bioSubmitJob(int type, bio_job *job) {
+void bioSubmitJob(int type, bio_job *job)
+{
     job->header.type = type;
     unsigned long worker = bio_job_to_worker[type];
     pthread_mutex_lock(&bio_mutex[worker]);
-    listAddNodeTail(bio_jobs[worker],job);
+    listAddNodeTail(bio_jobs[worker], job);
     bio_jobs_counter[type]++;
     pthread_cond_signal(&bio_newjob_cond[worker]);
     pthread_mutex_unlock(&bio_mutex[worker]);
 }
 
-void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...) {
+void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...)
+{
     va_list valist;
     /* Allocate memory for the job structure and all required
      * arguments */
@@ -203,20 +200,21 @@ void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...) {
     bioSubmitJob(BIO_LAZY_FREE, job);
 }
 
-void bioCreateCompRq(bio_worker_t assigned_worker, comp_fn *func, uint64_t user_data, void *user_ptr) {
+void bioCreateCompRq(bio_worker_t assigned_worker, comp_fn *func, uint64_t user_data, void *user_ptr)
+{
     int type;
     switch (assigned_worker) {
-        case BIO_WORKER_CLOSE_FILE:
-            type = BIO_COMP_RQ_CLOSE_FILE;
-            break;
-        case BIO_WORKER_AOF_FSYNC:
-            type = BIO_COMP_RQ_AOF_FSYNC;
-            break;
-        case BIO_WORKER_LAZY_FREE:
-            type = BIO_COMP_RQ_LAZY_FREE;
-            break;
-        default:
-            serverPanic("Invalid worker type in bioCreateCompRq().");
+    case BIO_WORKER_CLOSE_FILE:
+        type = BIO_COMP_RQ_CLOSE_FILE;
+        break;
+    case BIO_WORKER_AOF_FSYNC:
+        type = BIO_COMP_RQ_AOF_FSYNC;
+        break;
+    case BIO_WORKER_LAZY_FREE:
+        type = BIO_COMP_RQ_LAZY_FREE;
+        break;
+    default:
+        serverPanic("Invalid worker type in bioCreateCompRq().");
     }
 
     bio_job *job = zmalloc(sizeof(*job));
@@ -226,7 +224,8 @@ void bioCreateCompRq(bio_worker_t assigned_worker, comp_fn *func, uint64_t user_
     bioSubmitJob(type, job);
 }
 
-void bioCreateCloseJob(int fd, int need_fsync, int need_reclaim_cache) {
+void bioCreateCloseJob(int fd, int need_fsync, int need_reclaim_cache)
+{
     bio_job *job = zmalloc(sizeof(*job));
     job->fd_args.fd = fd;
     job->fd_args.need_fsync = need_fsync;
@@ -235,7 +234,8 @@ void bioCreateCloseJob(int fd, int need_fsync, int need_reclaim_cache) {
     bioSubmitJob(BIO_CLOSE_FILE, job);
 }
 
-void bioCreateCloseAofJob(int fd, long long offset, int need_reclaim_cache) {
+void bioCreateCloseAofJob(int fd, long long offset, int need_reclaim_cache)
+{
     bio_job *job = zmalloc(sizeof(*job));
     job->fd_args.fd = fd;
     job->fd_args.offset = offset;
@@ -245,7 +245,8 @@ void bioCreateCloseAofJob(int fd, long long offset, int need_reclaim_cache) {
     bioSubmitJob(BIO_CLOSE_AOF, job);
 }
 
-void bioCreateFsyncJob(int fd, long long offset, int need_reclaim_cache) {
+void bioCreateFsyncJob(int fd, long long offset, int need_reclaim_cache)
+{
     bio_job *job = zmalloc(sizeof(*job));
     job->fd_args.fd = fd;
     job->fd_args.offset = offset;
@@ -254,9 +255,10 @@ void bioCreateFsyncJob(int fd, long long offset, int need_reclaim_cache) {
     bioSubmitJob(BIO_AOF_FSYNC, job);
 }
 
-void *bioProcessBackgroundJobs(void *arg) {
+void *bioProcessBackgroundJobs(void *arg)
+{
     bio_job *job;
-    unsigned long worker = (unsigned long) arg;
+    unsigned long worker = (unsigned long)arg;
     sigset_t sigset;
 
     /* Check that the worker is within the right interval. */
@@ -274,10 +276,9 @@ void *bioProcessBackgroundJobs(void *arg) {
     sigemptyset(&sigset);
     sigaddset(&sigset, SIGALRM);
     if (pthread_sigmask(SIG_BLOCK, &sigset, NULL))
-        serverLog(LL_WARNING,
-            "Warning: can't mask SIGALRM in bio.c thread: %s", strerror(errno));
+        serverLog(LL_WARNING, "Warning: can't mask SIGALRM in bio.c thread: %s", strerror(errno));
 
-    while(1) {
+    while (1) {
         listNode *ln;
 
         /* The loop always starts with the lock hold. */
@@ -296,15 +297,12 @@ void *bioProcessBackgroundJobs(void *arg) {
         int job_type = job->header.type;
 
         if (job_type == BIO_CLOSE_FILE) {
-            if (job->fd_args.need_fsync &&
-                redis_fsync(job->fd_args.fd) == -1 &&
-                errno != EBADF && errno != EINVAL)
-            {
-                serverLog(LL_WARNING, "Fail to fsync the AOF file: %s",strerror(errno));
+            if (job->fd_args.need_fsync && redis_fsync(job->fd_args.fd) == -1 && errno != EBADF && errno != EINVAL) {
+                serverLog(LL_WARNING, "Fail to fsync the AOF file: %s", strerror(errno));
             }
             if (job->fd_args.need_reclaim_cache) {
                 if (reclaimFilePageCache(job->fd_args.fd, 0, 0) == -1) {
-                    serverLog(LL_NOTICE,"Unable to reclaim page cache: %s", strerror(errno));
+                    serverLog(LL_NOTICE, "Unable to reclaim page cache: %s", strerror(errno));
                 }
             }
             close(job->fd_args.fd);
@@ -312,33 +310,29 @@ void *bioProcessBackgroundJobs(void *arg) {
             /* The fd may be closed by main thread and reused for another
              * socket, pipe, or file. We just ignore these errno because
              * aof fsync did not really fail. */
-            if (redis_fsync(job->fd_args.fd) == -1 &&
-                errno != EBADF && errno != EINVAL)
-            {
+            if (redis_fsync(job->fd_args.fd) == -1 && errno != EBADF && errno != EINVAL) {
                 int last_status;
-                atomicGet(server.aof_bio_fsync_status,last_status);
-                atomicSet(server.aof_bio_fsync_status,C_ERR);
-                atomicSet(server.aof_bio_fsync_errno,errno);
+                atomicGet(server.aof_bio_fsync_status, last_status);
+                atomicSet(server.aof_bio_fsync_status, C_ERR);
+                atomicSet(server.aof_bio_fsync_errno, errno);
                 if (last_status == C_OK) {
-                    serverLog(LL_WARNING,
-                        "Fail to fsync the AOF file: %s",strerror(errno));
+                    serverLog(LL_WARNING, "Fail to fsync the AOF file: %s", strerror(errno));
                 }
             } else {
-                atomicSet(server.aof_bio_fsync_status,C_OK);
+                atomicSet(server.aof_bio_fsync_status, C_OK);
                 atomicSet(server.fsynced_reploff_pending, job->fd_args.offset);
             }
 
             if (job->fd_args.need_reclaim_cache) {
                 if (reclaimFilePageCache(job->fd_args.fd, 0, 0) == -1) {
-                    serverLog(LL_NOTICE,"Unable to reclaim page cache: %s", strerror(errno));
+                    serverLog(LL_NOTICE, "Unable to reclaim page cache: %s", strerror(errno));
                 }
             }
             if (job_type == BIO_CLOSE_AOF)
                 close(job->fd_args.fd);
         } else if (job_type == BIO_LAZY_FREE) {
             job->free_args.free_fn(job->free_args.free_args);
-        } else if ((job_type == BIO_COMP_RQ_CLOSE_FILE) ||
-                   (job_type == BIO_COMP_RQ_AOF_FSYNC) ||
+        } else if ((job_type == BIO_COMP_RQ_CLOSE_FILE) || (job_type == BIO_COMP_RQ_AOF_FSYNC) ||
                    (job_type == BIO_COMP_RQ_LAZY_FREE)) {
             bio_comp_item *comp_rsp = zmalloc(sizeof(bio_comp_item));
             comp_rsp->func = job->comp_rq.fn;
@@ -350,7 +344,7 @@ void *bioProcessBackgroundJobs(void *arg) {
             listAddNodeTail(bio_comp_list, comp_rsp);
             pthread_mutex_unlock(&bio_mutex_comp);
 
-            if (write(job_comp_pipe[1],"A",1) != 1) {
+            if (write(job_comp_pipe[1], "A", 1) != 1) {
                 /* Pipe is non-blocking, write() may fail if it's full. */
             }
         } else {
@@ -368,7 +362,8 @@ void *bioProcessBackgroundJobs(void *arg) {
 }
 
 /* Return the number of pending jobs of the specified type. */
-unsigned long bioPendingJobsOfType(int type) {
+unsigned long bioPendingJobsOfType(int type)
+{
     unsigned int worker = bio_job_to_worker[type];
 
     pthread_mutex_lock(&bio_mutex[worker]);
@@ -379,7 +374,8 @@ unsigned long bioPendingJobsOfType(int type) {
 }
 
 /* Wait for the job queue of the worker for jobs of specified type to become empty. */
-void bioDrainWorker(int job_type) {
+void bioDrainWorker(int job_type)
+{
     unsigned long worker = bio_job_to_worker[job_type];
 
     pthread_mutex_lock(&bio_mutex[worker]);
@@ -393,26 +389,26 @@ void bioDrainWorker(int job_type) {
  * used only when it's critical to stop the threads for some reason.
  * Currently Redis does this only on crash (for instance on SIGSEGV) in order
  * to perform a fast memory check without other threads messing with memory. */
-void bioKillThreads(void) {
+void bioKillThreads(void)
+{
     int err;
     unsigned long j;
 
     for (j = 0; j < BIO_WORKER_NUM; j++) {
-        if (bio_threads[j] == pthread_self()) continue;
+        if (bio_threads[j] == pthread_self())
+            continue;
         if (bio_threads[j] && pthread_cancel(bio_threads[j]) == 0) {
-            if ((err = pthread_join(bio_threads[j],NULL)) != 0) {
-                serverLog(LL_WARNING,
-                    "Bio worker thread #%lu can not be joined: %s",
-                        j, strerror(err));
+            if ((err = pthread_join(bio_threads[j], NULL)) != 0) {
+                serverLog(LL_WARNING, "Bio worker thread #%lu can not be joined: %s", j, strerror(err));
             } else {
-                serverLog(LL_WARNING,
-                    "Bio worker thread #%lu terminated",j);
+                serverLog(LL_WARNING, "Bio worker thread #%lu terminated", j);
             }
         }
     }
 }
 
-void bioPipeReadJobCompList(aeEventLoop *el, int fd, void *privdata, int mask) {
+void bioPipeReadJobCompList(aeEventLoop *el, int fd, void *privdata, int mask)
+{
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
@@ -420,7 +416,8 @@ void bioPipeReadJobCompList(aeEventLoop *el, int fd, void *privdata, int mask) {
     char buf[128];
     list *tmp_list = NULL;
 
-    while (read(fd, buf, sizeof(buf)) == sizeof(buf));
+    while (read(fd, buf, sizeof(buf)) == sizeof(buf))
+        ;
 
     /* Handle event loop events if pipe was written from event loop API */
     pthread_mutex_lock(&bio_mutex_comp);
@@ -430,7 +427,8 @@ void bioPipeReadJobCompList(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
     pthread_mutex_unlock(&bio_mutex_comp);
 
-    if (!tmp_list) return;
+    if (!tmp_list)
+        return;
 
     /* callback to all job completions  */
     while (listLength(tmp_list)) {

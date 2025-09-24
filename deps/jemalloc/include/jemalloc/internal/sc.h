@@ -173,7 +173,7 @@
 
 #if SC_LG_TINY_MIN == 0
 /* The div module doesn't support division by 1, which this would require. */
-#error "Unsupported LG_TINY_MIN"
+#    error "Unsupported LG_TINY_MIN"
 #endif
 
 /*
@@ -193,8 +193,8 @@
  * We could probably save some space in arenas by capping this at LG_VADDR size.
  */
 #define SC_LG_BASE_MAX (SC_PTR_BITS - 2)
-#define SC_NREGULAR (SC_NGROUP * 					\
-    (SC_LG_BASE_MAX - SC_LG_FIRST_REGULAR_BASE + 1) - 1)
+#define SC_NREGULAR                                                            \
+    (SC_NGROUP * (SC_LG_BASE_MAX - SC_LG_FIRST_REGULAR_BASE + 1) - 1)
 #define SC_NSIZES (SC_NTINY + SC_NPSEUDO + SC_NREGULAR)
 
 /*
@@ -221,29 +221,30 @@
  *
  * This gives us the quantity we seek.
  */
-#define SC_NPSIZES (							\
-    SC_NGROUP								\
-    + (SC_LG_BASE_MAX - (LG_PAGE + SC_LG_NGROUP)) * SC_NGROUP		\
-    + SC_NGROUP - 1)
+#define SC_NPSIZES                                                             \
+    (SC_NGROUP + (SC_LG_BASE_MAX - (LG_PAGE + SC_LG_NGROUP)) * SC_NGROUP       \
+      + SC_NGROUP - 1)
 
 /*
  * We declare a size class is binnable if size < page size * group. Or, in other
  * words, lg(size) < lg(page size) + lg(group size).
  */
-#define SC_NBINS (							\
-    /* Sub-regular size classes. */					\
-    SC_NTINY + SC_NPSEUDO						\
-    /* Groups with lg_regular_min_base <= lg_base <= lg_base_max */	\
-    + SC_NGROUP * (LG_PAGE + SC_LG_NGROUP - SC_LG_FIRST_REGULAR_BASE)	\
-    /* Last SC of the last group hits the bound exactly; exclude it. */	\
-    - 1)
+#define SC_NBINS                                                               \
+    (/* Sub-regular size classes. */                                           \
+      SC_NTINY + SC_NPSEUDO /* Groups with lg_regular_min_base <= lg_base <=   \
+                               lg_base_max */                                  \
+      + SC_NGROUP                                                              \
+        * (LG_PAGE + SC_LG_NGROUP                                              \
+          - SC_LG_FIRST_REGULAR_BASE) /* Last SC of the last group hits the    \
+                                         bound exactly; exclude it. */         \
+      - 1)
 
 /*
  * The size2index_tab lookup table uses uint8_t to encode each bin index, so we
  * cannot support more than 256 small size classes.
  */
 #if (SC_NBINS > 256)
-#  error "Too many small size classes"
+#    error "Too many small size classes"
 #endif
 
 /* The largest size class in the lookup table, and its binary log. */
@@ -255,12 +256,12 @@
 #define SC_SMALL_MAX_DELTA (1 << (LG_PAGE - 1))
 
 /* The largest size class allocated out of a slab. */
-#define SC_SMALL_MAXCLASS (SC_SMALL_MAX_BASE				\
-    + (SC_NGROUP - 1) * SC_SMALL_MAX_DELTA)
+#define SC_SMALL_MAXCLASS                                                      \
+    (SC_SMALL_MAX_BASE + (SC_NGROUP - 1) * SC_SMALL_MAX_DELTA)
 
 /* The fastpath assumes all lookup-able sizes are small. */
 #if (SC_SMALL_MAXCLASS < SC_LOOKUP_MAXCLASS)
-#  error "Lookup table sizes must be small"
+#    error "Lookup table sizes must be small"
 #endif
 
 /* The smallest size class not allocated out of a slab. */
@@ -276,72 +277,72 @@
 
 /* Maximum number of regions in one slab. */
 #ifndef CONFIG_LG_SLAB_MAXREGS
-#  define SC_LG_SLAB_MAXREGS (LG_PAGE - SC_LG_TINY_MIN)
+#    define SC_LG_SLAB_MAXREGS (LG_PAGE - SC_LG_TINY_MIN)
 #else
-#  if CONFIG_LG_SLAB_MAXREGS < (LG_PAGE - SC_LG_TINY_MIN)
-#    error "Unsupported SC_LG_SLAB_MAXREGS"
-#  else
-#    define SC_LG_SLAB_MAXREGS CONFIG_LG_SLAB_MAXREGS
-#  endif
+#    if CONFIG_LG_SLAB_MAXREGS < (LG_PAGE - SC_LG_TINY_MIN)
+#        error "Unsupported SC_LG_SLAB_MAXREGS"
+#    else
+#        define SC_LG_SLAB_MAXREGS CONFIG_LG_SLAB_MAXREGS
+#    endif
 #endif
 
 #define SC_SLAB_MAXREGS (1U << SC_LG_SLAB_MAXREGS)
 
 typedef struct sc_s sc_t;
 struct sc_s {
-	/* Size class index, or -1 if not a valid size class. */
-	int index;
-	/* Lg group base size (no deltas added). */
-	int lg_base;
-	/* Lg delta to previous size class. */
-	int lg_delta;
-	/* Delta multiplier.  size == 1<<lg_base + ndelta<<lg_delta */
-	int ndelta;
-	/*
-	 * True if the size class is a multiple of the page size, false
-	 * otherwise.
-	 */
-	bool psz;
-	/*
-	 * True if the size class is a small, bin, size class. False otherwise.
-	 */
-	bool bin;
-	/* The slab page count if a small bin size class, 0 otherwise. */
-	int pgs;
-	/* Same as lg_delta if a lookup table size class, 0 otherwise. */
-	int lg_delta_lookup;
+    /* Size class index, or -1 if not a valid size class. */
+    int index;
+    /* Lg group base size (no deltas added). */
+    int lg_base;
+    /* Lg delta to previous size class. */
+    int lg_delta;
+    /* Delta multiplier.  size == 1<<lg_base + ndelta<<lg_delta */
+    int ndelta;
+    /*
+     * True if the size class is a multiple of the page size, false
+     * otherwise.
+     */
+    bool psz;
+    /*
+     * True if the size class is a small, bin, size class. False otherwise.
+     */
+    bool bin;
+    /* The slab page count if a small bin size class, 0 otherwise. */
+    int pgs;
+    /* Same as lg_delta if a lookup table size class, 0 otherwise. */
+    int lg_delta_lookup;
 };
 
 typedef struct sc_data_s sc_data_t;
 struct sc_data_s {
-	/* Number of tiny size classes. */
-	unsigned ntiny;
-	/* Number of bins supported by the lookup table. */
-	int nlbins;
-	/* Number of small size class bins. */
-	int nbins;
-	/* Number of size classes. */
-	int nsizes;
-	/* Number of bits required to store NSIZES. */
-	int lg_ceil_nsizes;
-	/* Number of size classes that are a multiple of (1U << LG_PAGE). */
-	unsigned npsizes;
-	/* Lg of maximum tiny size class (or -1, if none). */
-	int lg_tiny_maxclass;
-	/* Maximum size class included in lookup table. */
-	size_t lookup_maxclass;
-	/* Maximum small size class. */
-	size_t small_maxclass;
-	/* Lg of minimum large size class. */
-	int lg_large_minclass;
-	/* The minimum large size class. */
-	size_t large_minclass;
-	/* Maximum (large) size class. */
-	size_t large_maxclass;
-	/* True if the sc_data_t has been initialized (for debugging only). */
-	bool initialized;
+    /* Number of tiny size classes. */
+    unsigned ntiny;
+    /* Number of bins supported by the lookup table. */
+    int nlbins;
+    /* Number of small size class bins. */
+    int nbins;
+    /* Number of size classes. */
+    int nsizes;
+    /* Number of bits required to store NSIZES. */
+    int lg_ceil_nsizes;
+    /* Number of size classes that are a multiple of (1U << LG_PAGE). */
+    unsigned npsizes;
+    /* Lg of maximum tiny size class (or -1, if none). */
+    int lg_tiny_maxclass;
+    /* Maximum size class included in lookup table. */
+    size_t lookup_maxclass;
+    /* Maximum small size class. */
+    size_t small_maxclass;
+    /* Lg of minimum large size class. */
+    int lg_large_minclass;
+    /* The minimum large size class. */
+    size_t large_minclass;
+    /* Maximum (large) size class. */
+    size_t large_maxclass;
+    /* True if the sc_data_t has been initialized (for debugging only). */
+    bool initialized;
 
-	sc_t sc[SC_NSIZES];
+    sc_t sc[SC_NSIZES];
 };
 
 size_t reg_size_compute(int lg_base, int lg_delta, int ndelta);
@@ -350,8 +351,8 @@ void sc_data_init(sc_data_t *data);
  * Updates slab sizes in [begin, end] to be pgs pages in length, if possible.
  * Otherwise, does its best to accommodate the request.
  */
-void sc_data_update_slab_size(sc_data_t *data, size_t begin, size_t end,
-    int pgs);
+void sc_data_update_slab_size(
+  sc_data_t *data, size_t begin, size_t end, int pgs);
 void sc_boot(sc_data_t *data);
 
 #endif /* JEMALLOC_INTERNAL_SC_H */

@@ -106,17 +106,17 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "../../src/redismodule.h"
-#include <stdio.h>
-#include <stdlib.h>
+#include "hnsw.h"
+#include "vset_config.h"
 #include <ctype.h>
-#include <string.h>
-#include <strings.h>
-#include <stdint.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
-#include "hnsw.h"
-#include "vset_config.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 
 // We inline directly the expression implementation here so that building
 // the module is trivial.
@@ -141,16 +141,16 @@ static uint64_t VectorSetTypeNextId = 0;
  * that will allow us to perform deletions and other operations that have
  * as input the element itself. */
 struct vsetObject {
-    HNSW *hnsw;                 // Proximity graph.
-    RedisModuleDict *dict;      // Element -> node mapping.
-    float *proj_matrix;         // Random projection matrix, NULL if no projection
-    uint32_t proj_input_size;     // Input dimension after projection.
-                                  // Output dimension is implicit in
-                                  // hnsw->vector_dim.
-    pthread_rwlock_t in_use_lock; // Lock needed to destroy the object safely.
-    uint64_t id;                // Unique ID used by threaded VADD to know the
-                                // object is still the same.
-    uint64_t numattribs;        // Number of nodes associated with an attribute.
+    HNSW *hnsw;                         // Proximity graph.
+    RedisModuleDict *dict;              // Element -> node mapping.
+    float *proj_matrix;                 // Random projection matrix, NULL if no projection
+    uint32_t proj_input_size;           // Input dimension after projection.
+                                        // Output dimension is implicit in
+                                        // hnsw->vector_dim.
+    pthread_rwlock_t in_use_lock;       // Lock needed to destroy the object safely.
+    uint64_t id;                        // Unique ID used by threaded VADD to know the
+                                        // object is still the same.
+    uint64_t numattribs;                // Number of nodes associated with an attribute.
     atomic_int thread_creation_pending; // Number of threads that are currently
                                         // pending to lock the object.
 };
@@ -166,7 +166,8 @@ struct vsetNodeVal {
 /* Count the number of set bits in an integer (population count/Hamming weight).
  * This is a portable implementation that doesn't rely on compiler
  * extensions. */
-static inline uint32_t bit_count(uint32_t n) {
+static inline uint32_t bit_count(uint32_t n)
+{
     uint32_t count = 0;
     while (n) {
         count += n & 1;
@@ -189,7 +190,8 @@ static inline uint32_t bit_count(uint32_t n) {
  * Note that we still save the projection matrix in the RDB file, because
  * in the future we may change the weights generation, and we want everything
  * to be backward compatible. */
-float *createProjectionMatrix(uint32_t input_dim, uint32_t output_dim) {
+float *createProjectionMatrix(uint32_t input_dim, uint32_t output_dim)
+{
     float *matrix = RedisModule_Alloc(sizeof(float) * input_dim * output_dim);
 
     /* Scale factor to normalize the projection. */
@@ -214,8 +216,7 @@ float *createProjectionMatrix(uint32_t input_dim, uint32_t output_dim) {
 }
 
 /* Apply random projection to input vector. Returns new allocated vector. */
-float *applyProjection(const float *input, const float *proj_matrix,
-                      uint32_t input_dim, uint32_t output_dim)
+float *applyProjection(const float *input, const float *proj_matrix, uint32_t input_dim, uint32_t output_dim)
 {
     float *output = RedisModule_Alloc(sizeof(float) * output_dim);
 
@@ -231,12 +232,13 @@ float *applyProjection(const float *input, const float *proj_matrix,
 }
 
 /* Create the vector as HNSW+Dictionary combined data structure. */
-struct vsetObject *createVectorSetObject(unsigned int dim, uint32_t quant_type, uint32_t hnsw_M) {
+struct vsetObject *createVectorSetObject(unsigned int dim, uint32_t quant_type, uint32_t hnsw_M)
+{
     struct vsetObject *o;
     o = RedisModule_Alloc(sizeof(*o));
 
     o->id = VectorSetTypeNextId++;
-    o->hnsw = hnsw_new(dim,quant_type,hnsw_M);
+    o->hnsw = hnsw_new(dim, quant_type, hnsw_M);
     if (!o->hnsw) { // May fail because of mutex creation.
         RedisModule_Free(o);
         return NULL;
@@ -247,23 +249,30 @@ struct vsetObject *createVectorSetObject(unsigned int dim, uint32_t quant_type, 
     o->proj_input_size = 0;
     o->numattribs = 0;
     o->thread_creation_pending = 0;
-    RedisModule_Assert(pthread_rwlock_init(&o->in_use_lock,NULL) == 0);
+    RedisModule_Assert(pthread_rwlock_init(&o->in_use_lock, NULL) == 0);
     return o;
 }
 
-void vectorSetReleaseNodeValue(void *v) {
+void vectorSetReleaseNodeValue(void *v)
+{
     struct vsetNodeVal *nv = v;
-    RedisModule_FreeString(NULL,nv->item);
-    if (nv->attrib) RedisModule_FreeString(NULL,nv->attrib);
+    RedisModule_FreeString(NULL, nv->item);
+    if (nv->attrib)
+        RedisModule_FreeString(NULL, nv->attrib);
     RedisModule_Free(nv);
 }
 
 /* Free the vector set object. */
-void vectorSetReleaseObject(struct vsetObject *o) {
-    if (!o) return;
-    if (o->hnsw) hnsw_free(o->hnsw,vectorSetReleaseNodeValue);
-    if (o->dict) RedisModule_FreeDict(NULL,o->dict);
-    if (o->proj_matrix) RedisModule_Free(o->proj_matrix);
+void vectorSetReleaseObject(struct vsetObject *o)
+{
+    if (!o)
+        return;
+    if (o->hnsw)
+        hnsw_free(o->hnsw, vectorSetReleaseNodeValue);
+    if (o->dict)
+        RedisModule_FreeDict(NULL, o->dict);
+    if (o->proj_matrix)
+        RedisModule_Free(o->proj_matrix);
     pthread_rwlock_destroy(&o->in_use_lock);
     RedisModule_Free(o);
 }
@@ -276,24 +285,31 @@ void vectorSetReleaseObject(struct vsetObject *o) {
  * that still didn't acquire the lock to finish their work. This
  * is useful only if we are going to call this function to delete
  * the object, and not if we want to just to modify it. */
-void vectorSetWaitAllBackgroundClients(struct vsetObject *vset, int for_del) {
+void vectorSetWaitAllBackgroundClients(struct vsetObject *vset, int for_del)
+{
     if (for_del) {
         // If we are going to destroy the object, after this call, let's
         // wait for threads that are being created and still didn't had
         // a chance to acquire the lock.
-        while (vset->thread_creation_pending > 0);
+        while (vset->thread_creation_pending > 0)
+            ;
     }
     RedisModule_Assert(pthread_rwlock_wrlock(&vset->in_use_lock) == 0);
     pthread_rwlock_unlock(&vset->in_use_lock);
 }
 
 /* Return a string representing the quantization type name of a vector set. */
-const char *vectorSetGetQuantName(struct vsetObject *o) {
-    switch(o->hnsw->quant_type) {
-    case HNSW_QUANT_NONE: return "f32";
-    case HNSW_QUANT_Q8: return "int8";
-    case HNSW_QUANT_BIN: return "bin";
-    default: return "unknown";
+const char *vectorSetGetQuantName(struct vsetObject *o)
+{
+    switch (o->hnsw->quant_type) {
+    case HNSW_QUANT_NONE:
+        return "f32";
+    case HNSW_QUANT_Q8:
+        return "int8";
+    case HNSW_QUANT_BIN:
+        return "bin";
+    default:
+        return "unknown";
     }
 }
 
@@ -302,23 +318,24 @@ const char *vectorSetGetQuantName(struct vsetObject *o) {
  *
  * Returns 1 if the element was added, or 0 if the element was already there
  * and was just updated. */
-int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange, RedisModuleString *val, RedisModuleString *attrib, int update, int ef)
+int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange, RedisModuleString *val,
+                    RedisModuleString *attrib, int update, int ef)
 {
-    hnswNode *node = RedisModule_DictGet(o->dict,val,NULL);
+    hnswNode *node = RedisModule_DictGet(o->dict, val, NULL);
     if (node != NULL) {
         if (update) {
             /* Wait for clients in the background: background VSIM
              * operations touch the nodes attributes we are going
              * to touch. */
-            vectorSetWaitAllBackgroundClients(o,0);
+            vectorSetWaitAllBackgroundClients(o, 0);
 
             struct vsetNodeVal *nv = node->value;
             /* Pass NULL as value-free function. We want to reuse
              * the old value. */
             hnsw_delete_node(o->hnsw, node, NULL);
-            node = hnsw_insert(o->hnsw,vec,qvec,qrange,0,nv,ef);
+            node = hnsw_insert(o->hnsw, vec, qvec, qrange, 0, nv, ef);
             RedisModule_Assert(node != NULL);
-            RedisModule_DictReplace(o->dict,val,node);
+            RedisModule_DictReplace(o->dict, val, node);
 
             /* If attrib != NULL, the user wants that in case of an update we
              * update the attribute as well (otherwise it remains as it was).
@@ -329,9 +346,9 @@ int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange
                 // Empty attribute string means: unset the attribute during
                 // the update.
                 size_t attrlen;
-                RedisModule_StringPtrLen(attrib,&attrlen);
+                RedisModule_StringPtrLen(attrib, &attrlen);
                 if (attrlen != 0) {
-                    RedisModule_RetainString(NULL,attrib);
+                    RedisModule_RetainString(NULL, attrib);
                     o->numattribs++;
                 } else {
                     attrib = NULL;
@@ -339,7 +356,7 @@ int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange
 
                 if (nv->attrib) {
                     o->numattribs--;
-                    RedisModule_FreeString(NULL,nv->attrib);
+                    RedisModule_FreeString(NULL, nv->attrib);
                 }
                 nv->attrib = attrib;
             }
@@ -350,7 +367,7 @@ int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange
     struct vsetNodeVal *nv = RedisModule_Alloc(sizeof(*nv));
     nv->item = val;
     nv->attrib = attrib;
-    node = hnsw_insert(o->hnsw,vec,qvec,qrange,0,nv,ef);
+    node = hnsw_insert(o->hnsw, vec, qvec, qrange, 0, nv, ef);
     if (node == NULL) {
         // XXX Technically in Redis-land we don't have out of memory, as we
         // crash on OOM. However the HNSW library may fail for error in the
@@ -358,10 +375,12 @@ int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange
         RedisModule_Free(nv);
         return 0;
     }
-    if (attrib != NULL) o->numattribs++;
-    RedisModule_DictSet(o->dict,val,node);
-    RedisModule_RetainString(NULL,val);
-    if (attrib) RedisModule_RetainString(NULL,attrib);
+    if (attrib != NULL)
+        o->numattribs++;
+    RedisModule_DictSet(o->dict, val, node);
+    RedisModule_RetainString(NULL, val);
+    if (attrib)
+        RedisModule_RetainString(NULL, attrib);
     return 1;
 }
 
@@ -374,63 +393,64 @@ int vectorSetInsert(struct vsetObject *o, float *vec, int8_t *qvec, float qrange
  * The function sets as a reference *consumed_args, so that the caller
  * knows how many arguments we consumed in order to parse the input
  * vector. Remaining arguments are often command options. */
-float *parseVector(RedisModuleString **argv, int argc, int start_idx,
-                  size_t *dim, uint32_t *reduce_dim, int *consumed_args)
+float *parseVector(RedisModuleString **argv, int argc, int start_idx, size_t *dim, uint32_t *reduce_dim,
+                   int *consumed_args)
 {
     int consumed = 0; // Arguments consumed
 
     /* Check for REDUCE option first. */
-    if (reduce_dim) *reduce_dim = 0;
-    if (reduce_dim && argc > start_idx + 2 &&
-        !strcasecmp(RedisModule_StringPtrLen(argv[start_idx],NULL),"REDUCE"))
-    {
+    if (reduce_dim)
+        *reduce_dim = 0;
+    if (reduce_dim && argc > start_idx + 2 && !strcasecmp(RedisModule_StringPtrLen(argv[start_idx], NULL), "REDUCE")) {
         long long rdim;
-        if (RedisModule_StringToLongLong(argv[start_idx+1],&rdim)
-            != REDISMODULE_OK || rdim <= 0)
-        {
+        if (RedisModule_StringToLongLong(argv[start_idx + 1], &rdim) != REDISMODULE_OK || rdim <= 0) {
             return NULL;
         }
-        if (reduce_dim) *reduce_dim = rdim;
-        start_idx += 2;  // Skip REDUCE and its argument.
+        if (reduce_dim)
+            *reduce_dim = rdim;
+        start_idx += 2; // Skip REDUCE and its argument.
         consumed += 2;
     }
 
     /* Now parse the vector format as before. */
     float *vec = NULL;
-    const char *vec_format = RedisModule_StringPtrLen(argv[start_idx],NULL);
+    const char *vec_format = RedisModule_StringPtrLen(argv[start_idx], NULL);
 
-    if (!strcasecmp(vec_format,"FP32")) {
-        if (argc < start_idx + 2) return NULL;  // Need FP32 + vector + value.
+    if (!strcasecmp(vec_format, "FP32")) {
+        if (argc < start_idx + 2)
+            return NULL; // Need FP32 + vector + value.
         size_t vec_raw_len;
-        const char *blob =
-            RedisModule_StringPtrLen(argv[start_idx+1],&vec_raw_len);
+        const char *blob = RedisModule_StringPtrLen(argv[start_idx + 1], &vec_raw_len);
 
         // Must be 4 bytes per component.
-        if (vec_raw_len % 4 || vec_raw_len < 4) return NULL;
-        *dim = vec_raw_len/4;
+        if (vec_raw_len % 4 || vec_raw_len < 4)
+            return NULL;
+        *dim = vec_raw_len / 4;
 
         vec = RedisModule_Alloc(vec_raw_len);
-        if (!vec) return NULL;
-        memcpy(vec,blob,vec_raw_len);
+        if (!vec)
+            return NULL;
+        memcpy(vec, blob, vec_raw_len);
         consumed += 2;
-    } else if (!strcasecmp(vec_format,"VALUES")) {
-        if (argc < start_idx + 2) return NULL;  // Need at least the dimension.
-        long long vdim; // Vector dimension passed by the user.
-        if (RedisModule_StringToLongLong(argv[start_idx+1],&vdim)
-            != REDISMODULE_OK || vdim < 1) return NULL;
+    } else if (!strcasecmp(vec_format, "VALUES")) {
+        if (argc < start_idx + 2)
+            return NULL; // Need at least the dimension.
+        long long vdim;  // Vector dimension passed by the user.
+        if (RedisModule_StringToLongLong(argv[start_idx + 1], &vdim) != REDISMODULE_OK || vdim < 1)
+            return NULL;
 
         // Check that all the arguments are available.
-        if (argc < start_idx + 2 + vdim) return NULL;
+        if (argc < start_idx + 2 + vdim)
+            return NULL;
 
         *dim = vdim;
         vec = RedisModule_Alloc(sizeof(float) * vdim);
-        if (!vec) return NULL;
+        if (!vec)
+            return NULL;
 
         for (int j = 0; j < vdim; j++) {
             double val;
-            if (RedisModule_StringToDouble(argv[start_idx+2+j],&val)
-                != REDISMODULE_OK)
-            {
+            if (RedisModule_StringToDouble(argv[start_idx + 2 + j], &val) != REDISMODULE_OK) {
                 RedisModule_Free(vec);
                 return NULL;
             }
@@ -438,10 +458,11 @@ float *parseVector(RedisModuleString **argv, int argc, int start_idx,
         }
         consumed += vdim + 2;
     } else {
-        return NULL;  // Unknown format.
+        return NULL; // Unknown format.
     }
 
-    if (consumed_args) *consumed_args = consumed;
+    if (consumed_args)
+        *consumed_args = consumed;
     return vec;
 }
 
@@ -452,10 +473,11 @@ float *parseVector(RedisModuleString **argv, int argc, int start_idx,
  * set of potential candidates, and later inserting the element in the
  * key (if it still exists, and if it is still the *same* vector set)
  * in the Reply callback. */
-void *VADD_thread(void *arg) {
+void *VADD_thread(void *arg)
+{
     pthread_detach(pthread_self());
 
-    void **targ = (void**)arg;
+    void **targ = (void **)arg;
     RedisModuleBlockedClient *bc = targ[0];
     struct vsetObject *vset = targ[1];
     float *vec = targ[3];
@@ -473,20 +495,21 @@ void *VADD_thread(void *arg) {
     /* Unblock the client so that our read reply will be invoked. */
     pthread_rwlock_unlock(&vset->in_use_lock);
     RedisModule_BlockedClientMeasureTimeEnd(bc);
-    RedisModule_UnblockClient(bc,targ); // Use targ as privdata.
+    RedisModule_UnblockClient(bc, targ); // Use targ as privdata.
     return NULL;
 }
 
 /* Reply callback for CAS variant of VADD.
  * Note: this is called in the main thread, in the background thread
  * we just do the read operation of gathering the neighbors. */
-int VADD_CASReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VADD_CASReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     (void)argc;
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
 
     int retval = REDISMODULE_OK;
-    void **targ = (void**)RedisModule_GetBlockedClientPrivateData(ctx);
-    uint64_t vset_id = (unsigned long) targ[2];
+    void **targ = (void **)RedisModule_GetBlockedClientPrivateData(ctx);
+    uint64_t vset_id = (unsigned long)targ[2];
     float *vec = targ[3];
     RedisModuleString *val = targ[4];
     InsertContext *ic = targ[5];
@@ -496,23 +519,21 @@ int VADD_CASReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     /* Open the key: there are no guarantees it still exists, or contains
      * a vector set, or even the SAME vector set. */
-    RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
-        REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
     int type = RedisModule_KeyType(key);
     struct vsetObject *vset = NULL;
 
-    if (type != REDISMODULE_KEYTYPE_EMPTY &&
-        RedisModule_ModuleTypeGetType(key) == VectorSetType)
-    {
+    if (type != REDISMODULE_KEYTYPE_EMPTY && RedisModule_ModuleTypeGetType(key) == VectorSetType) {
         vset = RedisModule_ModuleTypeGetValue(key);
         // Same vector set?
-        if (vset->id != vset_id) vset = NULL;
+        if (vset->id != vset_id)
+            vset = NULL;
 
         /* Also, if the element was already inserted, we just pretend
          * the other insert won. We don't even start a threaded VADD
          * if this was an update, since the deletion of the element itself
          * in order to perform the update would invalidate the CAS state. */
-        if (vset && RedisModule_DictGet(vset->dict,val,NULL) != NULL)
+        if (vset && RedisModule_DictGet(vset->dict, val, NULL) != NULL)
             vset = NULL;
     }
 
@@ -535,51 +556,53 @@ int VADD_CASReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
          * 'ic' could be NULL in case hnsw_prepare_insert() failed because of
          * locking failure (likely impossible in practical terms). */
         hnswNode *newnode;
-        if (ic == NULL ||
-            (newnode = hnsw_try_commit_insert(vset->hnsw, ic, nv)) == NULL)
-        {
+        if (ic == NULL || (newnode = hnsw_try_commit_insert(vset->hnsw, ic, nv)) == NULL) {
             /* If we are here, the CAS insert failed. We need to insert
              * again with full locking for neighbors selection and
              * actual insertion. This time we can't fail: */
             newnode = hnsw_insert(vset->hnsw, vec, NULL, 0, 0, nv, ef);
             RedisModule_Assert(newnode != NULL);
         }
-        RedisModule_DictSet(vset->dict,val,newnode);
-        val = NULL; // Don't free it later.
+        RedisModule_DictSet(vset->dict, val, newnode);
+        val = NULL;    // Don't free it later.
         attrib = NULL; // Don't free it later.
 
         RedisModule_ReplicateVerbatim(ctx);
     }
 
     // Whatever happens is a success... :D
-    RedisModule_ReplyWithBool(ctx,1);
-    if (val) RedisModule_FreeString(ctx,val); // Not added? Free it.
-    if (attrib) RedisModule_FreeString(ctx,attrib); // Not added? Free it.
+    RedisModule_ReplyWithBool(ctx, 1);
+    if (val)
+        RedisModule_FreeString(ctx, val); // Not added? Free it.
+    if (attrib)
+        RedisModule_FreeString(ctx, attrib); // Not added? Free it.
     RedisModule_Free(vec);
     return retval;
 }
 
 /* VADD key [REDUCE dim] FP32|VALUES vector value [CAS] [NOQUANT] [BIN] [Q8]
  *      [M count] */
-int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
 
-    if (argc < 5) return RedisModule_WrongArity(ctx);
+    if (argc < 5)
+        return RedisModule_WrongArity(ctx);
 
     /* Parse vector with optional REDUCE */
     size_t dim = 0;
     uint32_t reduce_dim = 0;
     int consumed_args;
-    int cas = 0; // Threaded check-and-set style insert.
-    long long ef = VSET_DEFAULT_C_EF; // HNSW creation time EF for new nodes.
+    int cas = 0;                              // Threaded check-and-set style insert.
+    long long ef = VSET_DEFAULT_C_EF;         // HNSW creation time EF for new nodes.
     long long hnsw_create_M = HNSW_DEFAULT_M; // HNSW creation default M value.
     float *vec = parseVector(argv, argc, 2, &dim, &reduce_dim, &consumed_args);
     RedisModuleString *attrib = NULL; // Attributes if passed via ATTRIB.
     if (!vec)
-        return RedisModule_ReplyWithError(ctx,"ERR invalid vector specification");
+        return RedisModule_ReplyWithError(ctx, "ERR invalid vector specification");
 
     /* Missing element string at the end? */
-    if (argc-2-consumed_args < 1) {
+    if (argc - 2 - consumed_args < 1) {
         RedisModule_Free(vec);
         return RedisModule_WrongArity(ctx);
     }
@@ -591,25 +614,21 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         const char *opt = RedisModule_StringPtrLen(argv[j], NULL);
         if (!strcasecmp(opt, "CAS")) {
             cas = 1;
-        } else if (!strcasecmp(opt, "EF") && j+1 < argc) {
-            if (RedisModule_StringToLongLong(argv[j+1], &ef)
-                != REDISMODULE_OK || ef <= 0 || ef > 1000000)
-            {
+        } else if (!strcasecmp(opt, "EF") && j + 1 < argc) {
+            if (RedisModule_StringToLongLong(argv[j + 1], &ef) != REDISMODULE_OK || ef <= 0 || ef > 1000000) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid EF");
             }
             j++; // skip argument.
-        } else if (!strcasecmp(opt, "M") && j+1 < argc) {
-            if (RedisModule_StringToLongLong(argv[j+1], &hnsw_create_M)
-                != REDISMODULE_OK || hnsw_create_M < HNSW_MIN_M ||
-                hnsw_create_M > HNSW_MAX_M)
-            {
+        } else if (!strcasecmp(opt, "M") && j + 1 < argc) {
+            if (RedisModule_StringToLongLong(argv[j + 1], &hnsw_create_M) != REDISMODULE_OK ||
+                hnsw_create_M < HNSW_MIN_M || hnsw_create_M > HNSW_MAX_M) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid M");
             }
             j++; // skip argument.
-        } else if (!strcasecmp(opt, "SETATTR") && j+1 < argc) {
-            attrib = argv[j+1];
+        } else if (!strcasecmp(opt, "SETATTR") && j + 1 < argc) {
+            attrib = argv[j + 1];
             j++; // skip argument.
         } else if (!strcasecmp(opt, "NOQUANT")) {
             quant_type = HNSW_QUANT_NONE;
@@ -619,7 +638,7 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             quant_type = HNSW_QUANT_Q8;
         } else {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,"ERR invalid option after element");
+            return RedisModule_ReplyWithError(ctx, "ERR invalid option after element");
         }
     }
 
@@ -630,10 +649,7 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
      * Also for Lua scripts and MULTI/EXEC, we want to run the command
      * on the main thread. */
     if (RedisModule_GetContextFlags(ctx) &
-            (REDISMODULE_CTX_FLAGS_REPLICATED|
-             REDISMODULE_CTX_FLAGS_LUA|
-             REDISMODULE_CTX_FLAGS_MULTI))
-    {
+        (REDISMODULE_CTX_FLAGS_REPLICATED | REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI)) {
         cas = 0;
     }
 
@@ -642,14 +658,11 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
 
     /* Open/create key */
-    RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
-        REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
     int type = RedisModule_KeyType(key);
-    if (type != REDISMODULE_KEYTYPE_EMPTY &&
-        RedisModule_ModuleTypeGetType(key) != VectorSetType)
-    {
+    if (type != REDISMODULE_KEYTYPE_EMPTY && RedisModule_ModuleTypeGetType(key) != VectorSetType) {
         RedisModule_Free(vec);
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
     /* Get the correct value argument based on format and REDUCE */
@@ -668,8 +681,7 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             // at least theoretically COULD fail. Likely this code path
             // is not reachable in practical terms.
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,
-                "ERR unable to create a Vector Set: system resources issue?");
+            return RedisModule_ReplyWithError(ctx, "ERR unable to create a Vector Set: system resources issue?");
         }
 
         /* Initialize projection if requested */
@@ -678,47 +690,40 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             vset->proj_input_size = dim;
 
             /* Project the vector */
-            float *projected = applyProjection(vec, vset->proj_matrix,
-                                            dim, reduce_dim);
+            float *projected = applyProjection(vec, vset->proj_matrix, dim, reduce_dim);
             RedisModule_Free(vec);
             vec = projected;
         }
-        RedisModule_ModuleTypeSetValue(key,VectorSetType,vset);
+        RedisModule_ModuleTypeSetValue(key, VectorSetType, vset);
     } else {
         vset = RedisModule_ModuleTypeGetValue(key);
 
         if (vset->hnsw->quant_type != quant_type) {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,
-                "ERR asked quantization mismatch with existing vector set");
+            return RedisModule_ReplyWithError(ctx, "ERR asked quantization mismatch with existing vector set");
         }
 
         if (vset->hnsw->M != hnsw_create_M) {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,
-                "ERR asked M value mismatch with existing vector set");
+            return RedisModule_ReplyWithError(ctx, "ERR asked M value mismatch with existing vector set");
         }
 
         if ((vset->proj_matrix == NULL && vset->hnsw->vector_dim != dim) ||
-            (vset->proj_matrix && vset->hnsw->vector_dim != reduce_dim))
-        {
+            (vset->proj_matrix && vset->hnsw->vector_dim != reduce_dim)) {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithErrorFormat(ctx,
-                "ERR Vector dimension mismatch - got %d but set has %d",
-                (int)dim, (int)vset->hnsw->vector_dim);
+            return RedisModule_ReplyWithErrorFormat(ctx, "ERR Vector dimension mismatch - got %d but set has %d",
+                                                    (int)dim, (int)vset->hnsw->vector_dim);
         }
 
         /* Check REDUCE compatibility */
         if (reduce_dim) {
             if (!vset->proj_matrix) {
                 RedisModule_Free(vec);
-                return RedisModule_ReplyWithError(ctx,
-                    "ERR cannot add projection to existing set without projection");
+                return RedisModule_ReplyWithError(ctx, "ERR cannot add projection to existing set without projection");
             }
             if (reduce_dim != vset->hnsw->vector_dim) {
                 RedisModule_Free(vec);
-                return RedisModule_ReplyWithError(ctx,
-                    "ERR projection dimension mismatch with existing set");
+                return RedisModule_ReplyWithError(ctx, "ERR projection dimension mismatch with existing set");
             }
         }
 
@@ -727,14 +732,14 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             /* Ensure input dimension matches the projection matrix's expected input dimension */
             if (dim != vset->proj_input_size) {
                 RedisModule_Free(vec);
-                return RedisModule_ReplyWithErrorFormat(ctx,
-                    "ERR Input dimension mismatch for projection - got %d but projection expects %d",
+                return RedisModule_ReplyWithErrorFormat(
+                    ctx,
+                    "ERR Input dimension mismatch for projection - got %d but projection expects "
+                    "%d",
                     (int)dim, (int)vset->proj_input_size);
             }
 
-            float *projected = applyProjection(vec, vset->proj_matrix,
-                                             vset->proj_input_size,
-                                             vset->hnsw->vector_dim);
+            float *projected = applyProjection(vec, vset->proj_matrix, vset->proj_input_size, vset->hnsw->vector_dim);
             RedisModule_Free(vec);
             vec = projected;
             dim = vset->hnsw->vector_dim;
@@ -743,34 +748,36 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     /* For existing keys don't do CAS updates. For how things work now, the
      * CAS state would be invalidated by the deletion before adding back. */
-    if (cas && RedisModule_DictGet(vset->dict,val,NULL) != NULL)
+    if (cas && RedisModule_DictGet(vset->dict, val, NULL) != NULL)
         cas = 0;
 
     /* Here depending on the CAS option we directly insert in a blocking
      * way, or use a thread to do candidate neighbors selection and only
      * later, in the reply callback, actually add the element. */
     if (cas) {
-        RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx,VADD_CASReply,NULL,NULL,0);
+        RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, VADD_CASReply, NULL, NULL, 0);
         pthread_t tid;
-        void **targ = RedisModule_Alloc(sizeof(void*)*8);
+        void **targ = RedisModule_Alloc(sizeof(void *) * 8);
         targ[0] = bc;
         targ[1] = vset;
-        targ[2] = (void*)(unsigned long)vset->id;
+        targ[2] = (void *)(unsigned long)vset->id;
         targ[3] = vec;
         targ[4] = val;
         targ[5] = NULL; // Used later for insertion context.
-        targ[6] = (void*)(unsigned long)ef;
+        targ[6] = (void *)(unsigned long)ef;
         targ[7] = attrib;
-        RedisModule_RetainString(ctx,val);
-        if (attrib) RedisModule_RetainString(ctx,attrib);
+        RedisModule_RetainString(ctx, val);
+        if (attrib)
+            RedisModule_RetainString(ctx, attrib);
         RedisModule_BlockedClientMeasureTimeStart(bc);
         vset->thread_creation_pending++;
-        if (pthread_create(&tid,NULL,VADD_thread,targ) != 0) {
+        if (pthread_create(&tid, NULL, VADD_thread, targ) != 0) {
             vset->thread_creation_pending--;
             RedisModule_AbortBlock(bc);
             RedisModule_Free(targ);
-            RedisModule_FreeString(ctx,val);
-            if (attrib) RedisModule_FreeString(ctx,attrib);
+            RedisModule_FreeString(ctx, val);
+            if (attrib)
+                RedisModule_FreeString(ctx, attrib);
 
             // Fall back to synchronous insert, see later in the code.
         } else {
@@ -780,23 +787,26 @@ int VADD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     /* Insert vector synchronously: we reach this place even
      * if cas was true but thread creation failed. */
-    int added = vectorSetInsert(vset,vec,NULL,0,val,attrib,1,ef);
+    int added = vectorSetInsert(vset, vec, NULL, 0, val, attrib, 1, ef);
     RedisModule_Free(vec);
 
-    RedisModule_ReplyWithBool(ctx,added);
-    if (added) RedisModule_ReplicateVerbatim(ctx);
+    RedisModule_ReplyWithBool(ctx, added);
+    if (added)
+        RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }
 
 /* HNSW callback to filter items according to a predicate function
  * (our FILTER expression in this case). */
-int vectorSetFilterCallback(void *value, void *privdata) {
+int vectorSetFilterCallback(void *value, void *privdata)
+{
     exprstate *expr = privdata;
     struct vsetNodeVal *nv = value;
-    if (nv->attrib == NULL) return 0; // No attributes? No match.
+    if (nv->attrib == NULL)
+        return 0; // No attributes? No match.
     size_t json_len;
-    char *json = (char*)RedisModule_StringPtrLen(nv->attrib,&json_len);
-    return exprRun(expr,json,json_len);
+    char *json = (char *)RedisModule_StringPtrLen(nv->attrib, &json_len);
+    return exprRun(expr, json, json_len);
 }
 
 /* Common path for the execution of the VSIM command both threaded and
@@ -804,10 +814,9 @@ int vectorSetFilterCallback(void *value, void *privdata) {
  * context obtained from a blocked client. The locking that is specific
  * to the vset object is handled by the caller, however the function
  * handles the HNSW locking explicitly. */
-void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset,
-    float *vec, unsigned long count, float epsilon, unsigned long withscores,
-    unsigned long withattribs, unsigned long ef, exprstate *filter_expr,
-    unsigned long filter_ef, int ground_truth)
+void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset, float *vec, unsigned long count, float epsilon,
+                  unsigned long withscores, unsigned long withattribs, unsigned long ef, exprstate *filter_expr,
+                  unsigned long filter_ef, int ground_truth)
 {
     /* In our scan, we can't just collect 'count' elements as
      * if count is small we would explore the graph in an insufficient
@@ -817,27 +826,25 @@ void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset,
      * VSET_DEFAULT_SEARCH_EF as minimum, or we match count if count
      * is greater than that. Otherwise the minumim will be the specified
      * EF argument. */
-    if (ef == 0) ef = VSET_DEFAULT_SEARCH_EF;
-    if (count > ef) ef = count;
+    if (ef == 0)
+        ef = VSET_DEFAULT_SEARCH_EF;
+    if (count > ef)
+        ef = count;
 
     /* Perform search */
-    hnswNode **neighbors = RedisModule_Alloc(sizeof(hnswNode*)*ef);
-    float *distances = RedisModule_Alloc(sizeof(float)*ef);
+    hnswNode **neighbors = RedisModule_Alloc(sizeof(hnswNode *) * ef);
+    float *distances = RedisModule_Alloc(sizeof(float) * ef);
     int slot = hnsw_acquire_read_slot(vset->hnsw);
     unsigned int found;
     if (ground_truth) {
-        found = hnsw_ground_truth_with_filter(vset->hnsw, vec, ef, neighbors,
-                    distances, slot, 0,
-                    filter_expr ? vectorSetFilterCallback : NULL,
-                    filter_expr);
+        found = hnsw_ground_truth_with_filter(vset->hnsw, vec, ef, neighbors, distances, slot, 0,
+                                              filter_expr ? vectorSetFilterCallback : NULL, filter_expr);
     } else {
         if (filter_expr == NULL) {
-            found = hnsw_search(vset->hnsw, vec, ef, neighbors,
-                                distances, slot, 0);
+            found = hnsw_search(vset->hnsw, vec, ef, neighbors, distances, slot, 0);
         } else {
-            found = hnsw_search_with_filter(vset->hnsw, vec, ef, neighbors,
-                        distances, slot, 0, vectorSetFilterCallback,
-                        filter_expr, filter_ef);
+            found = hnsw_search_with_filter(vset->hnsw, vec, ef, neighbors, distances, slot, 0, vectorSetFilterCallback,
+                                            filter_expr, filter_ef);
         }
     }
 
@@ -852,7 +859,8 @@ void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset,
 
     long long arraylen = 0;
     for (unsigned int i = 0; i < found && i < count; i++) {
-        if (distances[i] > epsilon) break;
+        if (distances[i] > epsilon)
+            break;
         struct vsetNodeVal *nv = neighbors[i]->value;
         RedisModule_ReplyWithString(ctx, nv->item);
         arraylen++;
@@ -866,11 +874,11 @@ void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset,
          * item, score, attribute. For RESP3 instead item -> [score, attribute]
          */
         if (resp3 && withscores && withattribs)
-            RedisModule_ReplyWithArray(ctx,2);
+            RedisModule_ReplyWithArray(ctx, 2);
 
         if (withscores) {
             /* The similarity score is provided in a 0-1 range. */
-            RedisModule_ReplyWithDouble(ctx, 1.0 - distances[i]/2.0);
+            RedisModule_ReplyWithDouble(ctx, 1.0 - distances[i] / 2.0);
         }
         if (withattribs) {
             /* Return the attributes as well, if any. */
@@ -880,32 +888,34 @@ void VSIM_execute(RedisModuleCtx *ctx, struct vsetObject *vset,
                 RedisModule_ReplyWithNull(ctx);
         }
     }
-    hnsw_release_read_slot(vset->hnsw,slot);
+    hnsw_release_read_slot(vset->hnsw, slot);
 
     if (reply_with_map) {
         RedisModule_ReplySetMapLength(ctx, arraylen);
     } else {
-        int items_per_ele = 1+withattribs+withscores;
+        int items_per_ele = 1 + withattribs + withscores;
         RedisModule_ReplySetArrayLength(ctx, arraylen * items_per_ele);
     }
 
     RedisModule_Free(vec);
     RedisModule_Free(neighbors);
     RedisModule_Free(distances);
-    if (filter_expr) exprFree(filter_expr);
+    if (filter_expr)
+        exprFree(filter_expr);
 }
 
 /* VSIM thread handling the blocked client request. */
-void *VSIM_thread(void *arg) {
+void *VSIM_thread(void *arg)
+{
     pthread_detach(pthread_self());
 
     // Extract arguments.
-    void **targ = (void**)arg;
+    void **targ = (void **)arg;
     RedisModuleBlockedClient *bc = targ[0];
     struct vsetObject *vset = targ[1];
     float *vec = targ[2];
     unsigned long count = (unsigned long)targ[3];
-    float epsilon = *((float*)targ[4]);
+    float epsilon = *((float *)targ[4]);
     unsigned long withscores = (unsigned long)targ[5];
     unsigned long withattribs = (unsigned long)targ[6];
     unsigned long ef = (unsigned long)targ[7];
@@ -930,26 +940,28 @@ void *VSIM_thread(void *arg) {
     // Cleanup.
     RedisModule_FreeThreadSafeContext(ctx);
     RedisModule_BlockedClientMeasureTimeEnd(bc);
-    RedisModule_UnblockClient(bc,NULL);
+    RedisModule_UnblockClient(bc, NULL);
     return NULL;
 }
 
 /* VSIM key [ELE|FP32|VALUES] <vector or ele> [WITHSCORES] [WITHATTRIBS] [COUNT num] [EPSILON eps] [EF exploration-factor] [FILTER expression] [FILTER-EF exploration-factor] */
-int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
     /* Basic argument check: need at least key and vector specification
      * method. */
-    if (argc < 4) return RedisModule_WrongArity(ctx);
+    if (argc < 4)
+        return RedisModule_WrongArity(ctx);
 
     /* Defaults */
     int withscores = 0;
     int withattribs = 0;
-    long long count = VSET_DEFAULT_COUNT;   /* New default value */
-    long long ef = 0;       /* Exploration factor (see HNSW paper) */
-    double epsilon = 2.0;   /* Max cosine distance */
-    long long ground_truth = 0; /* Linear scan instead of HNSW search? */
-    int no_thread = 0;       /* NOTHREAD option: exec on main thread. */
+    long long count = VSET_DEFAULT_COUNT; /* New default value */
+    long long ef = 0;                     /* Exploration factor (see HNSW paper) */
+    double epsilon = 2.0;                 /* Max cosine distance */
+    long long ground_truth = 0;           /* Linear scan instead of HNSW search? */
+    int no_thread = 0;                    /* NOTHREAD option: exec on main thread. */
 
     /* Things computed later. */
     long long filter_ef = 0;
@@ -973,7 +985,7 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     /* Vector parsing stage */
     float *vec = NULL;
     size_t dim = 0;
-    int vector_args = 0;  /* Number of args consumed by vector specification */
+    int vector_args = 0; /* Number of args consumed by vector specification */
 
     if (!strcasecmp(vectorType, "ELE")) {
         /* Get vector from existing element */
@@ -983,17 +995,16 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             return RedisModule_ReplyWithError(ctx, "ERR element not found in set");
         }
         vec = RedisModule_Alloc(sizeof(float) * vset->hnsw->vector_dim);
-        hnsw_get_node_vector(vset->hnsw,node,vec);
+        hnsw_get_node_vector(vset->hnsw, node, vec);
         dim = vset->hnsw->vector_dim;
-        vector_args = 2;  /* ELE + element name */
+        vector_args = 2; /* ELE + element name */
     } else {
         /* Parse vector. */
         int consumed_args;
 
         vec = parseVector(argv, argc, 2, &dim, NULL, &consumed_args);
         if (!vec) {
-            return RedisModule_ReplyWithError(ctx,
-                "ERR invalid vector specification");
+            return RedisModule_ReplyWithError(ctx, "ERR invalid vector specification");
         }
         vector_args = consumed_args;
 
@@ -1003,14 +1014,14 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
             /* Ensure input dimension matches the projection matrix's expected input dimension */
             if (dim != vset->proj_input_size) {
                 RedisModule_Free(vec);
-                return RedisModule_ReplyWithErrorFormat(ctx,
-                    "ERR Input dimension mismatch for projection - got %d but projection expects %d",
+                return RedisModule_ReplyWithErrorFormat(
+                    ctx,
+                    "ERR Input dimension mismatch for projection - got %d but projection expects "
+                    "%d",
                     (int)dim, (int)vset->proj_input_size);
             }
 
-            float *projected = applyProjection(vec, vset->proj_matrix,
-                                             vset->proj_input_size,
-                                             vset->hnsw->vector_dim);
+            float *projected = applyProjection(vec, vset->proj_matrix, vset->proj_input_size, vset->hnsw->vector_dim);
             RedisModule_Free(vec);
             vec = projected;
             dim = vset->hnsw->vector_dim;
@@ -1018,27 +1029,25 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
         /* Count consumed arguments */
         if (!strcasecmp(vectorType, "FP32")) {
-            vector_args = 2;  /* FP32 + vector blob */
+            vector_args = 2; /* FP32 + vector blob */
         } else if (!strcasecmp(vectorType, "VALUES")) {
             long long vdim;
             if (RedisModule_StringToLongLong(argv[3], &vdim) != REDISMODULE_OK) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid vector dimension");
             }
-            vector_args = 2 + vdim;  /* VALUES + dim + values */
+            vector_args = 2 + vdim; /* VALUES + dim + values */
         } else {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,
-                "ERR vector type must be ELE, FP32 or VALUES");
+            return RedisModule_ReplyWithError(ctx, "ERR vector type must be ELE, FP32 or VALUES");
         }
     }
 
     /* Check vector dimension matches set */
     if (dim != vset->hnsw->vector_dim) {
         RedisModule_Free(vec);
-        return RedisModule_ReplyWithErrorFormat(ctx,
-            "ERR Vector dimension mismatch - got %d but set has %d",
-            (int)dim, (int)vset->hnsw->vector_dim);
+        return RedisModule_ReplyWithErrorFormat(ctx, "ERR Vector dimension mismatch - got %d but set has %d", (int)dim,
+                                                (int)vset->hnsw->vector_dim);
     }
 
     /* Parse optional arguments - start after vector specification */
@@ -1057,68 +1066,58 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         } else if (!strcasecmp(opt, "NOTHREAD")) {
             no_thread = 1;
             j++;
-        } else if (!strcasecmp(opt, "COUNT") && j+1 < argc) {
-            if (RedisModule_StringToLongLong(argv[j+1], &count)
-                != REDISMODULE_OK || count <= 0)
-            {
+        } else if (!strcasecmp(opt, "COUNT") && j + 1 < argc) {
+            if (RedisModule_StringToLongLong(argv[j + 1], &count) != REDISMODULE_OK || count <= 0) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid COUNT");
             }
             j += 2;
-        } else if (!strcasecmp(opt, "EPSILON") && j+1 < argc) {
-            if (RedisModule_StringToDouble(argv[j+1], &epsilon) !=
-                REDISMODULE_OK || epsilon <= 0)
-            {
+        } else if (!strcasecmp(opt, "EPSILON") && j + 1 < argc) {
+            if (RedisModule_StringToDouble(argv[j + 1], &epsilon) != REDISMODULE_OK || epsilon <= 0) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid EPSILON");
             }
             j += 2;
-        } else if (!strcasecmp(opt, "EF") && j+1 < argc) {
-            if (RedisModule_StringToLongLong(argv[j+1], &ef) !=
-                REDISMODULE_OK || ef <= 0)
-            {
+        } else if (!strcasecmp(opt, "EF") && j + 1 < argc) {
+            if (RedisModule_StringToLongLong(argv[j + 1], &ef) != REDISMODULE_OK || ef <= 0) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid EF");
             }
             j += 2;
-        } else if (!strcasecmp(opt, "FILTER-EF") && j+1 < argc) {
-            if (RedisModule_StringToLongLong(argv[j+1], &filter_ef) !=
-                REDISMODULE_OK || filter_ef <= 0)
-            {
+        } else if (!strcasecmp(opt, "FILTER-EF") && j + 1 < argc) {
+            if (RedisModule_StringToLongLong(argv[j + 1], &filter_ef) != REDISMODULE_OK || filter_ef <= 0) {
                 RedisModule_Free(vec);
                 return RedisModule_ReplyWithError(ctx, "ERR invalid FILTER-EF");
             }
             j += 2;
-        } else if (!strcasecmp(opt, "FILTER") && j+1 < argc) {
-            RedisModuleString *exprarg = argv[j+1];
+        } else if (!strcasecmp(opt, "FILTER") && j + 1 < argc) {
+            RedisModuleString *exprarg = argv[j + 1];
             size_t exprlen;
-            char *exprstr = (char*)RedisModule_StringPtrLen(exprarg,&exprlen);
+            char *exprstr = (char *)RedisModule_StringPtrLen(exprarg, &exprlen);
             int errpos;
-            filter_expr = exprCompile(exprstr,&errpos);
+            filter_expr = exprCompile(exprstr, &errpos);
             if (filter_expr == NULL) {
-                if ((size_t)errpos >= exprlen) errpos = 0;
+                if ((size_t)errpos >= exprlen)
+                    errpos = 0;
                 RedisModule_Free(vec);
-                return RedisModule_ReplyWithErrorFormat(ctx,
-                    "ERR syntax error in FILTER expression near: %s",
-                        exprstr+errpos);
+                return RedisModule_ReplyWithErrorFormat(ctx, "ERR syntax error in FILTER expression near: %s",
+                                                        exprstr + errpos);
             }
             j += 2;
         } else {
             RedisModule_Free(vec);
-            return RedisModule_ReplyWithError(ctx,
-                "ERR syntax error in VSIM command");
+            return RedisModule_ReplyWithError(ctx, "ERR syntax error in VSIM command");
         }
     }
 
     int threaded_request = 1; // Run on a thread, by default.
-    if (filter_ef == 0) filter_ef = count * 100; // Max filter visited nodes.
+    if (filter_ef == 0)
+        filter_ef = count * 100; // Max filter visited nodes.
 
     /* Disable threaded for MULTI/EXEC and Lua, or if explicitly
      * requested by the user via the NOTHREAD option. */
     if (no_thread || VSGlobalConfig.forceSingleThreadExec ||
-        (RedisModule_GetContextFlags(ctx) &
-        (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI)))
-    {
+        (RedisModule_GetContextFlags(ctx) & (REDISMODULE_CTX_FLAGS_LUA | REDISMODULE_CTX_FLAGS_MULTI))) {
         threaded_request = 0;
     }
 
@@ -1129,29 +1128,30 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
          * every node will use more memory). This means that while this request
          * is threaded, and will NOT block Redis, it may end waiting for a
          * free slot if all the HNSW_MAX_THREADS slots are used. */
-        RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx,NULL,NULL,NULL,0);
+        RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, NULL, NULL, NULL, 0);
         pthread_t tid;
-        void **targ = RedisModule_Alloc(sizeof(void*)*11);
+        void **targ = RedisModule_Alloc(sizeof(void *) * 11);
         targ[0] = bc;
         targ[1] = vset;
         targ[2] = vec;
-        targ[3] = (void*)count;
+        targ[3] = (void *)count;
         targ[4] = RedisModule_Alloc(sizeof(float));
-        *((float*)targ[4]) = epsilon;
-        targ[5] = (void*)(unsigned long)withscores;
-        targ[6] = (void*)(unsigned long)withattribs;
-        targ[7] = (void*)(unsigned long)ef;
-        targ[8] = (void*)filter_expr;
-        targ[9] = (void*)(unsigned long)filter_ef;
-        targ[10] = (void*)(unsigned long)ground_truth;
+        *((float *)targ[4]) = epsilon;
+        targ[5] = (void *)(unsigned long)withscores;
+        targ[6] = (void *)(unsigned long)withattribs;
+        targ[7] = (void *)(unsigned long)ef;
+        targ[8] = (void *)filter_expr;
+        targ[9] = (void *)(unsigned long)filter_ef;
+        targ[10] = (void *)(unsigned long)ground_truth;
         RedisModule_BlockedClientMeasureTimeStart(bc);
         vset->thread_creation_pending++;
-        if (pthread_create(&tid,NULL,VSIM_thread,targ) != 0) {
+        if (pthread_create(&tid, NULL, VSIM_thread, targ) != 0) {
             vset->thread_creation_pending--;
             RedisModule_AbortBlock(bc);
             RedisModule_Free(targ[4]);
             RedisModule_Free(targ);
-            VSIM_execute(ctx, vset, vec, count, epsilon, withscores, withattribs, ef, filter_expr, filter_ef, ground_truth);
+            VSIM_execute(ctx, vset, vec, count, epsilon, withscores, withattribs, ef, filter_expr, filter_ef,
+                         ground_truth);
         }
     } else {
         VSIM_execute(ctx, vset, vec, count, epsilon, withscores, withattribs, ef, filter_expr, filter_ef, ground_truth);
@@ -1161,10 +1161,12 @@ int VSIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /* VDIM <key>: return the dimension of vectors in the vector set. */
-int VDIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VDIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    if (argc != 2)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     int type = RedisModule_KeyType(key);
@@ -1180,10 +1182,12 @@ int VDIM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 }
 
 /* VCARD <key>: return cardinality (num of elements) of the vector set. */
-int VCARD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VCARD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    if (argc != 2)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     int type = RedisModule_KeyType(key);
@@ -1201,18 +1205,19 @@ int VCARD_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 /* VREM key element
  * Remove an element from a vector set.
  * Returns 1 if the element was found and removed, 0 if not found. */
-int VREM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VREM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
 
-    if (argc != 3) return RedisModule_WrongArity(ctx);
+    if (argc != 3)
+        return RedisModule_WrongArity(ctx);
 
     /* Get key and value */
     RedisModuleString *key = argv[1];
     RedisModuleString *element = argv[2];
 
     /* Open key */
-    RedisModuleKey *keyptr = RedisModule_OpenKey(ctx, key,
-        REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *keyptr = RedisModule_OpenKey(ctx, key, REDISMODULE_READ | REDISMODULE_WRITE);
     int type = RedisModule_KeyType(keyptr);
 
     /* Handle non-existing key or wrong type */
@@ -1239,7 +1244,8 @@ int VREM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
      * locking and cleanup. We pass RedisModule_FreeString as the value
      * free function since the strings were retained at insertion time. */
     struct vsetNodeVal *nv = node->value;
-    if (nv->attrib != NULL) vset->numattribs--;
+    if (nv->attrib != NULL)
+        vset->numattribs--;
     RedisModule_Assert(hnsw_delete_node(vset->hnsw, node, vectorSetReleaseNodeValue) == 1);
 
     /* Destroy empty vector set. */
@@ -1259,19 +1265,21 @@ int VREM_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * return value will have some lack of precision due to quantization and
  * normalization of vectors. Also, if items were added using REDUCE, the
  * reduced vector is returned instead. */
-int VEMB_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VEMB_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
     int raw_output = 0; // RAW option.
 
-    if (argc < 3) return RedisModule_WrongArity(ctx);
+    if (argc < 3)
+        return RedisModule_WrongArity(ctx);
 
     /* Parse arguments. */
     for (int j = 3; j < argc; j++) {
         const char *opt = RedisModule_StringPtrLen(argv[j], NULL);
-        if (!strcasecmp(opt,"raw")) {
+        if (!strcasecmp(opt, "raw")) {
             raw_output = 1;
         } else {
-            return RedisModule_ReplyWithError(ctx,"ERR invalid option");
+            return RedisModule_ReplyWithError(ctx, "ERR invalid option");
         }
     }
 
@@ -1299,11 +1307,12 @@ int VEMB_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     if (raw_output) {
         int output_qrange = vset->hnsw->quant_type == HNSW_QUANT_Q8;
-        RedisModule_ReplyWithArray(ctx, 3+output_qrange);
+        RedisModule_ReplyWithArray(ctx, 3 + output_qrange);
         RedisModule_ReplyWithSimpleString(ctx, vectorSetGetQuantName(vset));
         RedisModule_ReplyWithStringBuffer(ctx, node->vector, hnsw_quants_bytes(vset->hnsw));
         RedisModule_ReplyWithDouble(ctx, node->l2);
-        if (output_qrange) RedisModule_ReplyWithDouble(ctx, node->quants_range);
+        if (output_qrange)
+            RedisModule_ReplyWithDouble(ctx, node->quants_range);
     } else {
         /* Get the vector associated with the node. */
         float *vec = RedisModule_Alloc(sizeof(float) * vset->hnsw->vector_dim);
@@ -1323,13 +1332,14 @@ int VEMB_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * Setting an empty string removes the attribute.
  * The command returns one if the attribute was actually updated or
  * zero if there is no key or element. */
-int VSETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VSETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 4) return RedisModule_WrongArity(ctx);
+    if (argc != 4)
+        return RedisModule_WrongArity(ctx);
 
-    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1],
-        REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
     int type = RedisModule_KeyType(key);
 
     if (type == REDISMODULE_KEYTYPE_EMPTY)
@@ -1348,7 +1358,7 @@ int VSETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
 
     /* Background VSIM operations use the node attributes, so
      * wait for background operations before messing with them. */
-    vectorSetWaitAllBackgroundClients(vset,0);
+    vectorSetWaitAllBackgroundClients(vset, 0);
 
     /* Set or delete the attribute based on the fact it's an empty
      * string or not. */
@@ -1382,10 +1392,12 @@ int VSETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
 /* VGETATTR key element
  * Get the JSON attribute associated with an element.
  * Returns NIL if the element has no attribute or doesn't exist. */
-int VGETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VGETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 3) return RedisModule_WrongArity(ctx);
+    if (argc != 3)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     int type = RedisModule_KeyType(key);
@@ -1415,10 +1427,12 @@ int VGETATTR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int arg
  * Reply is an array of arrays, where each nested array represents one level
  * of neighbors, from highest level to level 0. If WITHSCORES is specified,
  * each neighbor is followed by its distance from the element. */
-int VLINKS_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VLINKS_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc < 3 || argc > 4) return RedisModule_WrongArity(ctx);
+    if (argc < 3 || argc > 4)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleString *key = argv[1];
     RedisModuleString *element = argv[2];
@@ -1456,9 +1470,9 @@ int VLINKS_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     for (int i = node->level; i >= 0; i--) {
         /* Reply with array of neighbors at this level. */
         if (withscores)
-            RedisModule_ReplyWithMap(ctx,node->layers[i].num_links);
+            RedisModule_ReplyWithMap(ctx, node->layers[i].num_links);
         else
-            RedisModule_ReplyWithArray(ctx,node->layers[i].num_links);
+            RedisModule_ReplyWithArray(ctx, node->layers[i].num_links);
 
         /* Add each neighbor's element value to the array. */
         for (uint32_t j = 0; j < node->layers[i].num_links; j++) {
@@ -1468,7 +1482,7 @@ int VLINKS_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
                 float distance = hnsw_distance(vset->hnsw, node, node->layers[i].links[j]);
                 /* Convert distance to similarity score to match
                  * VSIM behavior.*/
-                float similarity = 1.0 - distance/2.0;
+                float similarity = 1.0 - distance / 2.0;
                 RedisModule_ReplyWithDouble(ctx, similarity);
             }
         }
@@ -1479,10 +1493,12 @@ int VLINKS_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 /* VINFO key
  * Returns information about a vector set, both visible and hidden
  * features of the HNSW data structure. */
-int VINFO_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VINFO_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
 
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    if (argc != 2)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
     int type = RedisModule_KeyType(key);
@@ -1547,20 +1563,21 @@ int VINFO_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
  *
  * If the key doesn't exist, returns NULL if count is not given, or
  * an empty array if a count was given. */
-int VRANDMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VRANDMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
 
     /* Check arguments. */
-    if (argc != 2 && argc != 3) return RedisModule_WrongArity(ctx);
+    if (argc != 2 && argc != 3)
+        return RedisModule_WrongArity(ctx);
 
     /* Parse optional count argument. */
-    long long count = 1;  /* Default is to return a single element. */
+    long long count = 1; /* Default is to return a single element. */
     int with_count = (argc == 3);
 
     if (with_count) {
         if (RedisModule_StringToLongLong(argv[2], &count) != REDISMODULE_OK) {
-            return RedisModule_ReplyWithError(ctx,
-                "ERR COUNT value is not an integer");
+            return RedisModule_ReplyWithError(ctx, "ERR COUNT value is not an integer");
         }
         /* Count = 0 is a special case, return empty array */
         if (count == 0) {
@@ -1625,7 +1642,7 @@ int VRANDMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
         /* Simple case: With duplicates, just pick random nodes
          * abs_count times. */
         for (long long i = 0; i < abs_count; i++) {
-            hnswNode *random_node = hnsw_random_node(vset->hnsw,0);
+            hnswNode *random_node = hnsw_random_node(vset->hnsw, 0);
             struct vsetNodeVal *nv = random_node->value;
             RedisModule_ReplyWithString(ctx, nv->item);
         }
@@ -1650,7 +1667,7 @@ int VRANDMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
                 /* Check if we've already returned this element. */
                 if (RedisModule_DictGet(returned, nv->item, NULL) == NULL) {
                     /* Mark as returned and add to results. */
-                    RedisModule_DictSet(returned, nv->item, (void*)1);
+                    RedisModule_DictSet(returned, nv->item, (void *)1);
                     RedisModule_ReplyWithString(ctx, nv->item);
                     returned_count++;
                 }
@@ -1688,9 +1705,11 @@ int VRANDMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int 
 /* VISMEMBER key element
  * Check if an element exists in a vector set.
  * Returns 1 if the element exists, 0 if not. */
-int VISMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VISMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     RedisModule_AutoMemory(ctx);
-    if (argc != 3) return RedisModule_WrongArity(ctx);
+    if (argc != 3)
+        return RedisModule_WrongArity(ctx);
 
     RedisModuleString *key = argv[1];
     RedisModuleString *element = argv[2];
@@ -1718,22 +1737,24 @@ int VISMEMBER_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 
 /* ============================== vset type methods ========================= */
 
-#define SAVE_FLAG_HAS_PROJMATRIX    (1<<0)
-#define SAVE_FLAG_HAS_ATTRIBS       (1<<1)
+#define SAVE_FLAG_HAS_PROJMATRIX (1 << 0)
+#define SAVE_FLAG_HAS_ATTRIBS (1 << 1)
 
 /* Save object to RDB */
-void VectorSetRdbSave(RedisModuleIO *rdb, void *value) {
+void VectorSetRdbSave(RedisModuleIO *rdb, void *value)
+{
     struct vsetObject *vset = value;
     RedisModule_SaveUnsigned(rdb, vset->hnsw->vector_dim);
     RedisModule_SaveUnsigned(rdb, vset->hnsw->node_count);
 
-    uint32_t hnsw_config = (vset->hnsw->quant_type & 0xff) |
-                           ((vset->hnsw->M & 0xffff) << 8);
+    uint32_t hnsw_config = (vset->hnsw->quant_type & 0xff) | ((vset->hnsw->M & 0xffff) << 8);
     RedisModule_SaveUnsigned(rdb, hnsw_config);
 
     uint32_t save_flags = 0;
-    if (vset->proj_matrix) save_flags |= SAVE_FLAG_HAS_PROJMATRIX;
-    if (vset->numattribs != 0) save_flags |= SAVE_FLAG_HAS_ATTRIBS;
+    if (vset->proj_matrix)
+        save_flags |= SAVE_FLAG_HAS_PROJMATRIX;
+    if (vset->numattribs != 0)
+        save_flags |= SAVE_FLAG_HAS_ATTRIBS;
     RedisModule_SaveUnsigned(rdb, save_flags);
 
     /* Save projection matrix if present */
@@ -1750,7 +1771,7 @@ void VectorSetRdbSave(RedisModuleIO *rdb, void *value) {
     }
 
     hnswNode *node = vset->hnsw->head;
-    while(node) {
+    while (node) {
         struct vsetNodeVal *nv = node->value;
         RedisModule_SaveString(rdb, nv->item);
         if (vset->numattribs) {
@@ -1759,7 +1780,7 @@ void VectorSetRdbSave(RedisModuleIO *rdb, void *value) {
             else
                 RedisModule_SaveStringBuffer(rdb, "", 0);
         }
-        hnswSerNode *sn = hnsw_serialize_node(vset->hnsw,node);
+        hnswSerNode *sn = hnsw_serialize_node(vset->hnsw, node);
         RedisModule_SaveStringBuffer(rdb, (const char *)sn->vector, sn->vector_size);
         RedisModule_SaveUnsigned(rdb, sn->params_count);
         for (uint32_t j = 0; j < sn->params_count; j++)
@@ -1771,36 +1792,41 @@ void VectorSetRdbSave(RedisModuleIO *rdb, void *value) {
 
 /* Load object from RDB. Recover from recoverable errors (read errors)
  * by performing cleanup. */
-void *VectorSetRdbLoad(RedisModuleIO *rdb, int encver) {
-    if (encver != 0) return NULL;  // Invalid version
+void *VectorSetRdbLoad(RedisModuleIO *rdb, int encver)
+{
+    if (encver != 0)
+        return NULL; // Invalid version
 
     uint32_t dim = RedisModule_LoadUnsigned(rdb);
     uint64_t elements = RedisModule_LoadUnsigned(rdb);
     uint32_t hnsw_config = RedisModule_LoadUnsigned(rdb);
-    if (RedisModule_IsIOError(rdb)) return NULL;
+    if (RedisModule_IsIOError(rdb))
+        return NULL;
     uint32_t quant_type = hnsw_config & 0xff;
     uint32_t hnsw_m = (hnsw_config >> 8) & 0xffff;
 
     /* Check that the quantization type is correct. Otherwise
      * return ASAP signaling the error. */
-    if (quant_type != HNSW_QUANT_NONE &&
-        quant_type != HNSW_QUANT_Q8 &&
-        quant_type != HNSW_QUANT_BIN) return NULL;
+    if (quant_type != HNSW_QUANT_NONE && quant_type != HNSW_QUANT_Q8 && quant_type != HNSW_QUANT_BIN)
+        return NULL;
 
-    if (hnsw_m == 0) hnsw_m = 16; // Default, useful for RDB files predating
-                                  // this configuration parameter: it was fixed
-                                  // to 16.
-    struct vsetObject *vset = createVectorSetObject(dim,quant_type,hnsw_m);
+    if (hnsw_m == 0)
+        hnsw_m = 16; // Default, useful for RDB files predating
+                     // this configuration parameter: it was fixed
+                     // to 16.
+    struct vsetObject *vset = createVectorSetObject(dim, quant_type, hnsw_m);
     RedisModule_Assert(vset != NULL);
 
     /* Load projection matrix if present */
     uint32_t save_flags = RedisModule_LoadUnsigned(rdb);
-    if (RedisModule_IsIOError(rdb)) goto ioerr;
+    if (RedisModule_IsIOError(rdb))
+        goto ioerr;
     int has_projection = save_flags & SAVE_FLAG_HAS_PROJMATRIX;
     int has_attribs = save_flags & SAVE_FLAG_HAS_ATTRIBS;
     if (has_projection) {
         uint32_t input_dim = RedisModule_LoadUnsigned(rdb);
-        if (RedisModule_IsIOError(rdb)) goto ioerr;
+        if (RedisModule_IsIOError(rdb))
+            goto ioerr;
         uint32_t output_dim = dim;
         size_t matrix_size = sizeof(float) * input_dim * output_dim;
 
@@ -1809,42 +1835,45 @@ void *VectorSetRdbLoad(RedisModuleIO *rdb, int encver) {
 
         // Load projection matrix as a binary blob
         char *matrix_blob = RedisModule_LoadStringBuffer(rdb, NULL);
-        if (matrix_blob == NULL) goto ioerr;
+        if (matrix_blob == NULL)
+            goto ioerr;
         memcpy(vset->proj_matrix, matrix_blob, matrix_size);
         RedisModule_Free(matrix_blob);
     }
 
-    while(elements--) {
+    while (elements--) {
         // Load associated string element.
         RedisModuleString *ele = RedisModule_LoadString(rdb);
-        if (RedisModule_IsIOError(rdb)) goto ioerr;
+        if (RedisModule_IsIOError(rdb))
+            goto ioerr;
         RedisModuleString *attrib = NULL;
         if (has_attribs) {
             attrib = RedisModule_LoadString(rdb);
             if (RedisModule_IsIOError(rdb)) {
-                RedisModule_FreeString(NULL,ele);
+                RedisModule_FreeString(NULL, ele);
                 goto ioerr;
             }
             size_t attrlen;
-            RedisModule_StringPtrLen(attrib,&attrlen);
+            RedisModule_StringPtrLen(attrib, &attrlen);
             if (attrlen == 0) {
-                RedisModule_FreeString(NULL,attrib);
+                RedisModule_FreeString(NULL, attrib);
                 attrib = NULL;
             }
         }
         size_t vector_len;
         void *vector = RedisModule_LoadStringBuffer(rdb, &vector_len);
         if (RedisModule_IsIOError(rdb)) {
-            RedisModule_FreeString(NULL,ele);
-            if (attrib) RedisModule_FreeString(NULL,attrib);
+            RedisModule_FreeString(NULL, ele);
+            if (attrib)
+                RedisModule_FreeString(NULL, attrib);
             goto ioerr;
         }
         uint32_t vector_bytes = hnsw_quants_bytes(vset->hnsw);
         if (vector_len != vector_bytes) {
-            RedisModule_LogIOError(rdb,"warning",
-                                       "Mismatching vector dimension");
-            RedisModule_FreeString(NULL,ele);
-            if (attrib) RedisModule_FreeString(NULL,attrib);
+            RedisModule_LogIOError(rdb, "warning", "Mismatching vector dimension");
+            RedisModule_FreeString(NULL, ele);
+            if (attrib)
+                RedisModule_FreeString(NULL, attrib);
             RedisModule_Free(vector);
             goto ioerr;
         }
@@ -1852,20 +1881,22 @@ void *VectorSetRdbLoad(RedisModuleIO *rdb, int encver) {
         // Load node parameters back.
         uint32_t params_count = RedisModule_LoadUnsigned(rdb);
         if (RedisModule_IsIOError(rdb)) {
-            RedisModule_FreeString(NULL,ele);
-            if (attrib) RedisModule_FreeString(NULL,attrib);
+            RedisModule_FreeString(NULL, ele);
+            if (attrib)
+                RedisModule_FreeString(NULL, attrib);
             RedisModule_Free(vector);
             goto ioerr;
         }
 
-        uint64_t *params = RedisModule_Alloc(params_count*sizeof(uint64_t));
+        uint64_t *params = RedisModule_Alloc(params_count * sizeof(uint64_t));
         for (uint32_t j = 0; j < params_count; j++) {
             // Ignore loading errors here: handled at the end of the loop.
             params[j] = RedisModule_LoadUnsigned(rdb);
         }
         if (RedisModule_IsIOError(rdb)) {
-            RedisModule_FreeString(NULL,ele);
-            if (attrib) RedisModule_FreeString(NULL,attrib);
+            RedisModule_FreeString(NULL, ele);
+            if (attrib)
+                RedisModule_FreeString(NULL, attrib);
             RedisModule_Free(vector);
             RedisModule_Free(params);
             goto ioerr;
@@ -1876,22 +1907,23 @@ void *VectorSetRdbLoad(RedisModuleIO *rdb, int encver) {
         nv->attrib = attrib;
         hnswNode *node = hnsw_insert_serialized(vset->hnsw, vector, params, params_count, nv);
         if (node == NULL) {
-            RedisModule_LogIOError(rdb,"warning",
-                                       "Vector set node index loading error");
+            RedisModule_LogIOError(rdb, "warning", "Vector set node index loading error");
             vectorSetReleaseNodeValue(nv);
             RedisModule_Free(vector);
             RedisModule_Free(params);
             goto ioerr;
         }
-        if (nv->attrib) vset->numattribs++;
-        RedisModule_DictSet(vset->dict,ele,node);
+        if (nv->attrib)
+            vset->numattribs++;
+        RedisModule_DictSet(vset->dict, ele, node);
         RedisModule_Free(vector);
         RedisModule_Free(params);
     }
 
     uint64_t salt[2];
-    RedisModule_GetRandomBytes((unsigned char*)salt,sizeof(salt));
-    if (!hnsw_deserialize_index(vset->hnsw, salt[0], salt[1])) goto ioerr;
+    RedisModule_GetRandomBytes((unsigned char *)salt, sizeof(salt));
+    if (!hnsw_deserialize_index(vset->hnsw, salt[0], salt[1]))
+        goto ioerr;
 
     return vset;
 
@@ -1903,7 +1935,8 @@ ioerr:
 }
 
 /* Calculate memory usage */
-size_t VectorSetMemUsage(const void *value) {
+size_t VectorSetMemUsage(const void *value)
+{
     const struct vsetObject *vset = value;
     size_t size = sizeof(*vset);
 
@@ -1921,7 +1954,8 @@ size_t VectorSetMemUsage(const void *value) {
 
     /* Account for each node's memory usage. */
     hnswNode *node = vset->hnsw->head;
-    if (node == NULL) return size;
+    if (node == NULL)
+        return size;
 
     /* Base node structure. */
     size += sizeof(*node) * vset->hnsw->node_count;
@@ -1937,11 +1971,11 @@ size_t VectorSetMemUsage(const void *value) {
 
     /* All the nodes have layer 0 links. */
     uint64_t level0_links = node->layers[0].max_links;
-    uint64_t other_levels_links = level0_links/2;
-    size += sizeof(hnswNode*) * level0_links * vset->hnsw->node_count;
+    uint64_t other_levels_links = level0_links / 2;
+    size += sizeof(hnswNode *) * level0_links * vset->hnsw->node_count;
 
     /* Add the 0.33 remaining part, but upper layers have less links. */
-    size += (sizeof(hnswNode*) * other_levels_links * vset->hnsw->node_count)/3;
+    size += (sizeof(hnswNode *) * other_levels_links * vset->hnsw->node_count) / 3;
 
     /* Associated string value and attributres.
      * Use Redis Module API to get string size, and guess that all the
@@ -1949,7 +1983,7 @@ size_t VectorSetMemUsage(const void *value) {
     size_t items_scanned = 0, items_size = 0;
     size_t attribs_scanned = 0, attribs_size = 0;
     int scan_effort = 20;
-    while(scan_effort > 0 && node) {
+    while (scan_effort > 0 && node) {
         struct vsetNodeVal *nv = node->value;
         items_size += RedisModule_MallocSizeString(nv->item);
         items_scanned++;
@@ -1975,21 +2009,23 @@ size_t VectorSetMemUsage(const void *value) {
     size += attribs_size / attribs_scanned * vset->numattribs;
 
     /* Account for dictionary overhead - this is an approximation. */
-    size += RedisModule_DictSize(vset->dict) * (sizeof(void*) * 2);
+    size += RedisModule_DictSize(vset->dict) * (sizeof(void *) * 2);
 
     return size;
 }
 
 /* Free the entire data structure */
-void VectorSetFree(void *value) {
+void VectorSetFree(void *value)
+{
     struct vsetObject *vset = value;
 
-    vectorSetWaitAllBackgroundClients(vset,1);
+    vectorSetWaitAllBackgroundClients(vset, 1);
     vectorSetReleaseObject(value);
 }
 
 /* Add object digest to the digest context */
-void VectorSetDigest(RedisModuleDigest *md, void *value) {
+void VectorSetDigest(RedisModuleDigest *md, void *value)
+{
     struct vsetObject *vset = value;
 
     /* Add consistent order-independent hash of all vectors */
@@ -2000,17 +2036,17 @@ void VectorSetDigest(RedisModuleDigest *md, void *value) {
     RedisModule_DigestAddLongLong(md, vset->hnsw->vector_dim);
     RedisModule_DigestEndSequence(md);
 
-    while(node) {
+    while (node) {
         struct vsetNodeVal *nv = node->value;
         /* Hash each vector component */
         RedisModule_DigestAddStringBuffer(md, node->vector, hnsw_quants_bytes(vset->hnsw));
         /* Hash the associated value */
         size_t len;
         const char *str = RedisModule_StringPtrLen(nv->item, &len);
-        RedisModule_DigestAddStringBuffer(md, (char*)str, len);
+        RedisModule_DigestAddStringBuffer(md, (char *)str, len);
         if (nv->attrib) {
             str = RedisModule_StringPtrLen(nv->attrib, &len);
-            RedisModule_DigestAddStringBuffer(md, (char*)str, len);
+            RedisModule_DigestAddStringBuffer(md, (char *)str, len);
         }
         node = node->next;
         RedisModule_DigestEndSequence(md);
@@ -2018,7 +2054,8 @@ void VectorSetDigest(RedisModuleDigest *md, void *value) {
 }
 
 // int VectorSets_InitModuleConfig(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-int VectorSets_InitModuleConfig(RedisModuleCtx *ctx) {
+int VectorSets_InitModuleConfig(RedisModuleCtx *ctx)
+{
     if (RegisterModuleConfig(ctx) == REDISMODULE_ERR) {
         RedisModule_Log(ctx, "warning", "Error registering module configuration");
         return REDISMODULE_ERR;
@@ -2041,86 +2078,75 @@ int VectorSets_InitModuleConfig(RedisModuleCtx *ctx) {
 
 /* This function must be present on each Redis module. It is used in order to
  * register the commands into the Redis server. */
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"vectorset",1,REDISMODULE_APIVER_1)
-        == REDISMODULE_ERR) return REDISMODULE_ERR;
+    if (RedisModule_Init(ctx, "vectorset", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
 
     if (VectorSets_InitModuleConfig(ctx) == REDISMODULE_ERR) {
         return REDISMODULE_ERR;
     }
 
-    RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS|REDISMODULE_OPTIONS_HANDLE_REPL_ASYNC_LOAD);
+    RedisModule_SetModuleOptions(ctx,
+                                 REDISMODULE_OPTIONS_HANDLE_IO_ERRORS | REDISMODULE_OPTIONS_HANDLE_REPL_ASYNC_LOAD);
 
-    RedisModuleTypeMethods tm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = VectorSetRdbLoad,
-        .rdb_save = VectorSetRdbSave,
-        .aof_rewrite = NULL,
-        .mem_usage = VectorSetMemUsage,
-        .free = VectorSetFree,
-        .digest = VectorSetDigest
-    };
+    RedisModuleTypeMethods tm = {.version = REDISMODULE_TYPE_METHOD_VERSION,
+                                 .rdb_load = VectorSetRdbLoad,
+                                 .rdb_save = VectorSetRdbSave,
+                                 .aof_rewrite = NULL,
+                                 .mem_usage = VectorSetMemUsage,
+                                 .free = VectorSetFree,
+                                 .digest = VectorSetDigest};
 
-    VectorSetType = RedisModule_CreateDataType(ctx,"vectorset",0,&tm);
-    if (VectorSetType == NULL) return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"VADD",
-        VADD_RedisCommand,"write deny-oom",1,1,1) == REDISMODULE_ERR)
+    VectorSetType = RedisModule_CreateDataType(ctx, "vectorset", 0, &tm);
+    if (VectorSetType == NULL)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"VREM",
-        VREM_RedisCommand,"write",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VADD", VADD_RedisCommand, "write deny-oom", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"VSIM",
-        VSIM_RedisCommand,"readonly",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VREM", VREM_RedisCommand, "write", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VDIM",
-        VDIM_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VSIM", VSIM_RedisCommand, "readonly", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VCARD",
-        VCARD_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VDIM", VDIM_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VEMB",
-        VEMB_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VCARD", VCARD_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VLINKS",
-        VLINKS_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VEMB", VEMB_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VINFO",
-        VINFO_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VLINKS", VLINKS_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VSETATTR",
-        VSETATTR_RedisCommand, "write fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VINFO", VINFO_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VGETATTR",
-        VGETATTR_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VSETATTR", VSETATTR_RedisCommand, "write fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VRANDMEMBER",
-        VRANDMEMBER_RedisCommand, "readonly", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VGETATTR", VGETATTR_RedisCommand, "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "VISMEMBER",
-        VISMEMBER_RedisCommand, "readonly", 1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "VRANDMEMBER", VRANDMEMBER_RedisCommand, "readonly", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    hnsw_set_allocator(RedisModule_Free, RedisModule_Alloc,
-                       RedisModule_Realloc);
+    if (RedisModule_CreateCommand(ctx, "VISMEMBER", VISMEMBER_RedisCommand, "readonly", 1, 1, 1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    hnsw_set_allocator(RedisModule_Free, RedisModule_Alloc, RedisModule_Realloc);
 
     return REDISMODULE_OK;
 }
 
-int VectorSets_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int VectorSets_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     return RedisModule_OnLoad(ctx, argv, argc);
 }

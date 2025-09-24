@@ -22,11 +22,11 @@ typedef enum bio_worker_t {
 
 /* Background job opcodes */
 typedef enum bio_job_type_t {
-    BIO_CLOSE_FILE = 0,     /* Deferred close(2) syscall. */
-    BIO_AOF_FSYNC,          /* Deferred AOF fsync. */
-    BIO_LAZY_FREE,          /* Deferred objects freeing. */
+    BIO_CLOSE_FILE = 0, /* Deferred close(2) syscall. */
+    BIO_AOF_FSYNC,      /* Deferred AOF fsync. */
+    BIO_LAZY_FREE,      /* Deferred objects freeing. */
     BIO_CLOSE_AOF,
-    BIO_COMP_RQ_CLOSE_FILE,  /* Job completion request, registered on close-file worker's queue */
+    BIO_COMP_RQ_CLOSE_FILE, /* Job completion request, registered on close-file worker's queue */
     BIO_COMP_RQ_AOF_FSYNC,  /* Job completion request, registered on aof-fsync worker's queue */
     BIO_COMP_RQ_LAZY_FREE,  /* Job completion request, registered on lazy-free worker's queue */
     BIO_NUM_OPS
@@ -42,6 +42,5 @@ void bioCreateCloseAofJob(int fd, long long offset, int need_reclaim_cache);
 void bioCreateFsyncJob(int fd, long long offset, int need_reclaim_cache);
 void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...);
 void bioCreateCompRq(bio_worker_t assigned_worker, comp_fn *func, uint64_t user_data, void *user_ptr);
-
 
 #endif

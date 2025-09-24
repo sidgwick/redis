@@ -1,14 +1,14 @@
 #include "redismodule.h"
 
-#include <string.h>
 #include <assert.h>
+#include <string.h>
 
 /* Module configuration, save aux or not? */
-#define CONF_AUX_OPTION_NO_AUX           0
-#define CONF_AUX_OPTION_SAVE2            1 << 0
-#define CONF_AUX_OPTION_BEFORE_KEYSPACE  1 << 1
-#define CONF_AUX_OPTION_AFTER_KEYSPACE   1 << 2
-#define CONF_AUX_OPTION_NO_DATA          1 << 3
+#define CONF_AUX_OPTION_NO_AUX 0
+#define CONF_AUX_OPTION_SAVE2 1 << 0
+#define CONF_AUX_OPTION_BEFORE_KEYSPACE 1 << 1
+#define CONF_AUX_OPTION_AFTER_KEYSPACE 1 << 2
+#define CONF_AUX_OPTION_NO_DATA 1 << 3
 long long conf_aux_count = 0;
 
 /* Registered type */
@@ -67,7 +67,8 @@ void replAsyncLoadCallback(RedisModuleCtx *ctx, RedisModuleEvent e, uint64_t sub
     }
 }
 
-void *testrdb_type_load(RedisModuleIO *rdb, int encver) {
+void *testrdb_type_load(RedisModuleIO *rdb, int encver)
+{
     int count = RedisModule_LoadSigned(rdb);
     RedisModuleString *str = RedisModule_LoadString(rdb);
     float f = RedisModule_LoadFloat(rdb);
@@ -79,25 +80,29 @@ void *testrdb_type_load(RedisModuleIO *rdb, int encver) {
         return NULL;
     }
     /* Using the values only after checking for io errors. */
-    assert(count==1);
-    assert(encver==1);
-    assert(f==1.5f);
-    assert(ld==0.333333333333333333L);
+    assert(count == 1);
+    assert(encver == 1);
+    assert(f == 1.5f);
+    assert(ld == 0.333333333333333333L);
     return str;
 }
 
-void testrdb_type_save(RedisModuleIO *rdb, void *value) {
-    RedisModuleString *str = (RedisModuleString*)value;
+void testrdb_type_save(RedisModuleIO *rdb, void *value)
+{
+    RedisModuleString *str = (RedisModuleString *)value;
     RedisModule_SaveSigned(rdb, 1);
     RedisModule_SaveString(rdb, str);
     RedisModule_SaveFloat(rdb, 1.5);
     RedisModule_SaveLongDouble(rdb, 0.333333333333333333L);
 }
 
-void testrdb_aux_save(RedisModuleIO *rdb, int when) {
-    if (!(conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE)) assert(when == REDISMODULE_AUX_AFTER_RDB);
-    if (!(conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE)) assert(when == REDISMODULE_AUX_BEFORE_RDB);
-    assert(conf_aux_count!=CONF_AUX_OPTION_NO_AUX);
+void testrdb_aux_save(RedisModuleIO *rdb, int when)
+{
+    if (!(conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE))
+        assert(when == REDISMODULE_AUX_AFTER_RDB);
+    if (!(conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE))
+        assert(when == REDISMODULE_AUX_BEFORE_RDB);
+    assert(conf_aux_count != CONF_AUX_OPTION_NO_AUX);
     if (when == REDISMODULE_AUX_BEFORE_RDB) {
         if (before_str) {
             RedisModule_SaveSigned(rdb, 1);
@@ -115,11 +120,14 @@ void testrdb_aux_save(RedisModuleIO *rdb, int when) {
     }
 }
 
-int testrdb_aux_load(RedisModuleIO *rdb, int encver, int when) {
+int testrdb_aux_load(RedisModuleIO *rdb, int encver, int when)
+{
     assert(encver == 1);
-    if (!(conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE)) assert(when == REDISMODULE_AUX_AFTER_RDB);
-    if (!(conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE)) assert(when == REDISMODULE_AUX_BEFORE_RDB);
-    assert(conf_aux_count!=CONF_AUX_OPTION_NO_AUX);
+    if (!(conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE))
+        assert(when == REDISMODULE_AUX_AFTER_RDB);
+    if (!(conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE))
+        assert(when == REDISMODULE_AUX_BEFORE_RDB);
+    assert(conf_aux_count != CONF_AUX_OPTION_NO_AUX);
     RedisModuleCtx *ctx = RedisModule_GetContextFromIO(rdb);
     if (when == REDISMODULE_AUX_BEFORE_RDB) {
         if (async_loading == 0) {
@@ -168,9 +176,10 @@ int testrdb_aux_load(RedisModuleIO *rdb, int encver, int when) {
     return REDISMODULE_OK;
 }
 
-void testrdb_type_free(void *value) {
+void testrdb_type_free(void *value)
+{
     if (value)
-        RedisModule_FreeString(NULL, (RedisModuleString*)value);
+        RedisModule_FreeString(NULL, (RedisModuleString *)value);
 }
 
 int testrdb_set_before(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
@@ -191,7 +200,7 @@ int testrdb_set_before(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 int testrdb_get_before(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
     REDISMODULE_NOT_USED(argv);
-    if (argc != 1){
+    if (argc != 1) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -206,7 +215,7 @@ int testrdb_get_before(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 int testrdb_async_loading_get_before(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
     REDISMODULE_NOT_USED(argv);
-    if (argc != 1){
+    if (argc != 1) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -219,7 +228,7 @@ int testrdb_async_loading_get_before(RedisModuleCtx *ctx, RedisModuleString **ar
 
 int testrdb_set_after(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
-    if (argc != 2){
+    if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -235,7 +244,7 @@ int testrdb_set_after(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 int testrdb_get_after(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
     REDISMODULE_NOT_USED(argv);
-    if (argc != 1){
+    if (argc != 1) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -248,7 +257,7 @@ int testrdb_get_after(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 
 int testrdb_set_key(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
-    if (argc != 3){
+    if (argc != 3) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -266,7 +275,7 @@ int testrdb_set_key(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 
 int testrdb_get_key(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
-    if (argc != 2){
+    if (argc != 2) {
         RedisModule_WrongArity(ctx);
         return REDISMODULE_OK;
     }
@@ -287,7 +296,8 @@ int testrdb_get_n_aux_load_called(RedisModuleCtx *ctx, RedisModuleString **argv,
     return REDISMODULE_OK;
 }
 
-int test2rdb_aux_load(RedisModuleIO *rdb, int encver, int when) {
+int test2rdb_aux_load(RedisModuleIO *rdb, int encver, int when)
+{
     REDISMODULE_NOT_USED(rdb);
     REDISMODULE_NOT_USED(encver);
     REDISMODULE_NOT_USED(when);
@@ -295,23 +305,26 @@ int test2rdb_aux_load(RedisModuleIO *rdb, int encver, int when) {
     return REDISMODULE_OK;
 }
 
-void test2rdb_aux_save(RedisModuleIO *rdb, int when) {
+void test2rdb_aux_save(RedisModuleIO *rdb, int when)
+{
     REDISMODULE_NOT_USED(rdb);
     REDISMODULE_NOT_USED(when);
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
-    if (RedisModule_Init(ctx,"testrdb",1,REDISMODULE_APIVER_1) == REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "testrdb", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    RedisModule_SetModuleOptions(ctx, REDISMODULE_OPTIONS_HANDLE_IO_ERRORS | REDISMODULE_OPTIONS_HANDLE_REPL_ASYNC_LOAD);
+    RedisModule_SetModuleOptions(ctx,
+                                 REDISMODULE_OPTIONS_HANDLE_IO_ERRORS | REDISMODULE_OPTIONS_HANDLE_REPL_ASYNC_LOAD);
 
     if (argc > 0)
         RedisModule_StringToLongLong(argv[0], &conf_aux_count);
 
-    if (conf_aux_count==CONF_AUX_OPTION_NO_AUX) {
+    if (conf_aux_count == CONF_AUX_OPTION_NO_AUX) {
         RedisModuleTypeMethods datatype_methods = {
             .version = 1,
             .rdb_load = testrdb_type_load,
@@ -335,8 +348,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             .aux_load = testrdb_aux_load,
             .aux_save = testrdb_aux_save,
             .aux_save_triggers = ((conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE) ? REDISMODULE_AUX_BEFORE_RDB : 0) |
-                                 ((conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE)  ? REDISMODULE_AUX_AFTER_RDB : 0)
-        };
+                                 ((conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE) ? REDISMODULE_AUX_AFTER_RDB : 0)};
 
         if (conf_aux_count & CONF_AUX_OPTION_SAVE2) {
             datatype_methods.aux_save2 = testrdb_aux_save;
@@ -353,8 +365,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             .aux_load = test2rdb_aux_load,
             .aux_save = test2rdb_aux_save,
             .aux_save_triggers = ((conf_aux_count & CONF_AUX_OPTION_BEFORE_KEYSPACE) ? REDISMODULE_AUX_BEFORE_RDB : 0) |
-                                 ((conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE)  ? REDISMODULE_AUX_AFTER_RDB : 0)
-        };
+                                 ((conf_aux_count & CONF_AUX_OPTION_AFTER_KEYSPACE) ? REDISMODULE_AUX_AFTER_RDB : 0)};
         if (conf_aux_count & CONF_AUX_OPTION_SAVE2) {
             datatype_methods.aux_save2 = test2rdb_aux_save;
         }
@@ -362,37 +373,40 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         RedisModule_CreateDataType(ctx, "test__rdb", 1, &datatype_methods);
     }
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.set.before", testrdb_set_before,"deny-oom",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.set.before", testrdb_set_before, "deny-oom", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.get.before", testrdb_get_before,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.get.before", testrdb_get_before, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.async_loading.get.before", testrdb_async_loading_get_before,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.async_loading.get.before", testrdb_async_loading_get_before, "", 0, 0,
+                                  0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.set.after", testrdb_set_after,"deny-oom",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.set.after", testrdb_set_after, "deny-oom", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.get.after", testrdb_get_after,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.get.after", testrdb_get_after, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.set.key", testrdb_set_key,"deny-oom",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.set.key", testrdb_set_key, "deny-oom", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.get.key", testrdb_get_key,"",1,1,1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "testrdb.get.key", testrdb_get_key, "", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"testrdb.get.n_aux_load_called", testrdb_get_n_aux_load_called,"",1,1,1) == REDISMODULE_ERR)
-            return REDISMODULE_ERR;
+    if (RedisModule_CreateCommand(ctx, "testrdb.get.n_aux_load_called", testrdb_get_n_aux_load_called, "", 1, 1, 1) ==
+        REDISMODULE_ERR)
+        return REDISMODULE_ERR;
 
-    RedisModule_SubscribeToServerEvent(ctx,
-        RedisModuleEvent_ReplAsyncLoad, replAsyncLoadCallback);
+    RedisModule_SubscribeToServerEvent(ctx, RedisModuleEvent_ReplAsyncLoad, replAsyncLoadCallback);
 
     return REDISMODULE_OK;
 }
 
-int RedisModule_OnUnload(RedisModuleCtx *ctx) {
+int RedisModule_OnUnload(RedisModuleCtx *ctx)
+{
     if (before_str)
         RedisModule_FreeString(ctx, before_str);
     if (after_str)

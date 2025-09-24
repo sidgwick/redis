@@ -119,11 +119,11 @@
 #ifndef __EBUCKETS_H
 #define __EBUCKETS_H
 
-#include <stdlib.h>
-#include <sys/types.h>
+#include "rax.h"
 #include <stdarg.h>
 #include <stdint.h>
-#include "rax.h"
+#include <stdlib.h>
+#include <sys/types.h>
 
 /*
  * EB_BUCKET_KEY_PRECISION - Defines the number of bits to ignore from the
@@ -140,14 +140,13 @@
  * The idea of it is to trim the rax tree depth, avoid having too many branches,
  * and reduce frequent modifications of the tree to the minimum.
  */
-#define EB_BUCKET_KEY_PRECISION 0   /* TBD: modify to 10 */
+#define EB_BUCKET_KEY_PRECISION 0 /* TBD: modify to 10 */
 
 /* From expiration time to bucket-key */
 #define EB_BUCKET_KEY(exptime) ((exptime) >> EB_BUCKET_KEY_PRECISION)
 
-
-#define EB_EXPIRE_TIME_MAX     ((uint64_t)0x0000FFFFFFFFFFFF) /* Maximum expire-time. */
-#define EB_EXPIRE_TIME_INVALID (EB_EXPIRE_TIME_MAX+1) /* assumed bigger than max */
+#define EB_EXPIRE_TIME_MAX ((uint64_t)0x0000FFFFFFFFFFFF) /* Maximum expire-time. */
+#define EB_EXPIRE_TIME_INVALID (EB_EXPIRE_TIME_MAX + 1)   /* assumed bigger than max */
 
 /* Handler to ebuckets DS. Pointer to a list, rax or NULL (empty DS). See also ebIsList(). */
 typedef void *ebuckets;
@@ -163,25 +162,25 @@ typedef struct ExpireMeta {
     /* 48bits of unix-time in msec.  This value is sufficient to represent, in
      * unix-time, until the date of 02 August, 10889
      */
-    uint32_t expireTimeLo;              /* Low bits of expireTime. */
-    uint16_t expireTimeHi;              /* High bits of expireTime. */
+    uint32_t expireTimeLo; /* Low bits of expireTime. */
+    uint16_t expireTimeHi; /* High bits of expireTime. */
 
-    unsigned int lastInSegment    : 1;  /* Last item in segment. If set, then 'next' will
+    unsigned int lastInSegment : 1;   /* Last item in segment. If set, then 'next' will
                                            point to the NextSegHdr, unless lastItemBucket=1
                                            then it will point to segment header of the
                                            current segment. */
-    unsigned int firstItemBucket  : 1;  /* First item in bucket. This flag assist
+    unsigned int firstItemBucket : 1; /* First item in bucket. This flag assist
                                            to manipulate segments directly without
                                            the need to traverse from start the
                                            rax tree  */
-    unsigned int lastItemBucket   : 1;  /* Last item in bucket. This flag assist
+    unsigned int lastItemBucket : 1;  /* Last item in bucket. This flag assist
                                            to manipulate segments directly without
                                            the need to traverse from start the
                                            rax tree  */
-    unsigned int numItems         : 5;  /* Only first item in segment will maintain
+    unsigned int numItems : 5;        /* Only first item in segment will maintain
                                            this value. */
 
-    unsigned int trash            : 1;  /* This flag indicates whether the ExpireMeta
+    unsigned int trash : 1; /* This flag indicates whether the ExpireMeta
                                            associated with the item is leftover.
                                            There is always a potential to reuse the
                                            item after removal/deletion. Note that,
@@ -190,7 +189,7 @@ typedef struct ExpireMeta {
                                            TTL is valid or leftover. See function
                                            ebGetExpireTime(). */
 
-    unsigned int userData         : 3;  /* ebuckets can be used to store in same
+    unsigned int userData : 3; /* ebuckets can be used to store in same
                                            instance few different types of items,
                                            such as, listpack and hash. This field
                                            is reserved to store such identification
@@ -199,9 +198,9 @@ typedef struct ExpireMeta {
                                            It is not used by ebuckets internally and
                                            should be maintained by the user */
 
-    unsigned int reserved         : 4;
+    unsigned int reserved : 4;
 
-    void *next;                       /* - If not last item in segment then next
+    void *next; /* - If not last item in segment then next
                                            points to next eItem (lastInSegment=0).
                                          - If last in segment but not last in
                                            bucket (lastItemBucket=0) then it
@@ -218,7 +217,7 @@ typedef struct ExpireMeta {
  * an argument to each API call. */
 typedef struct EbucketsType {
     /* getter to extract the ExpireMeta from the item */
-    ExpireMeta* (*getExpireMeta)(const eItem item);
+    ExpireMeta *(*getExpireMeta)(const eItem item);
 
     /* Called during ebDestroy(). Set to NULL if not needed. */
     void (*onDeleteItem)(eItem item, void *ctx);
@@ -232,14 +231,14 @@ typedef struct EbucketsType {
 /* Returned value by `onExpireItem` callback to indicate the action to be taken by
  * ebExpire(). */
 typedef enum ExpireAction {
-    ACT_REMOVE_EXP_ITEM=0,      /* Remove the item from ebuckets. */
-    ACT_UPDATE_EXP_ITEM,        /* Re-insert the item with updated expiration-time.
+    ACT_REMOVE_EXP_ITEM = 0, /* Remove the item from ebuckets. */
+    ACT_UPDATE_EXP_ITEM,     /* Re-insert the item with updated expiration-time.
                                    Before returning this value, the cb need to
                                    update expiration time of the item by assisting
                                    function ebSetMetaExpTime(). The item will be
                                    kept aside and will be added again to ebuckets
                                    at the end of ebExpire() */
-    ACT_STOP_ACTIVE_EXP         /* Stop active-expiration. It will assume that
+    ACT_STOP_ACTIVE_EXP      /* Stop active-expiration. It will assume that
                                    provided 'item' wasn't deleted by the callback. */
 } ExpireAction;
 
@@ -248,11 +247,11 @@ typedef struct ExpireInfo {
     /* onExpireItem - Called during active-expiration by ebExpire() */
     ExpireAction (*onExpireItem)(eItem item, void *ctx);
 
-    uint64_t maxToExpire;         /* [INPUT ] Limit of number expired items to scan */
-    void *ctx;                    /* [INPUT ] context to pass to onExpireItem */
-    uint64_t now;                 /* [INPUT ] Current time in msec. */
-    uint64_t itemsExpired;        /* [OUTPUT] Returns the number of expired or updated items. */
-    uint64_t nextExpireTime;      /* [OUTPUT] Next expiration time. Returns
+    uint64_t maxToExpire;    /* [INPUT ] Limit of number expired items to scan */
+    void *ctx;               /* [INPUT ] context to pass to onExpireItem */
+    uint64_t now;            /* [INPUT ] Current time in msec. */
+    uint64_t itemsExpired;   /* [OUTPUT] Returns the number of expired or updated items. */
+    uint64_t nextExpireTime; /* [OUTPUT] Next expiration time. Returns
                                      EB_EXPIRE_TIME_INVALID if none left. */
 } ExpireInfo;
 
@@ -265,21 +264,24 @@ typedef struct EbucketsIterator {
     int isRax;
 
     /* public read only */
-    eItem currItem;               /* Current item ref. Use ebGetMetaExpTime()
+    eItem currItem;           /* Current item ref. Use ebGetMetaExpTime()
                                      on `currItem` to get expiration time.*/
-    uint64_t itemsCurrBucket;     /* Number of items in current bucket. */
+    uint64_t itemsCurrBucket; /* Number of items in current bucket. */
 } EbucketsIterator;
 
 typedef void *(ebDefragAllocFunction)(void *ptr);
 typedef void *(ebDefragAllocItemFunction)(void *ptr, void *privdata);
 typedef struct {
-    ebDefragAllocFunction *defragAlloc; /* Used for rax nodes, segment etc. */
-    ebDefragAllocItemFunction *defragItem;  /* Defrag-realloc eitem */
+    ebDefragAllocFunction *defragAlloc;    /* Used for rax nodes, segment etc. */
+    ebDefragAllocItemFunction *defragItem; /* Defrag-realloc eitem */
 } ebDefragFunctions;
 
 /* ebuckets API */
 
-static inline ebuckets ebCreate(void) { return NULL; } /* Empty ebuckets */
+static inline ebuckets ebCreate(void)
+{
+    return NULL;
+} /* Empty ebuckets */
 
 void ebDestroy(ebuckets *eb, EbucketsType *type, void *deletedItemsCbCtx);
 
@@ -287,7 +289,10 @@ void ebExpire(ebuckets *eb, EbucketsType *type, ExpireInfo *info);
 
 uint64_t ebExpireDryRun(ebuckets eb, EbucketsType *type, uint64_t now);
 
-static inline int ebIsEmpty(ebuckets eb) { return eb == NULL; }
+static inline int ebIsEmpty(ebuckets eb)
+{
+    return eb == NULL;
+}
 
 uint64_t ebGetNextTimeToExpire(ebuckets eb, EbucketsType *type);
 
@@ -311,15 +316,16 @@ int ebNext(EbucketsIterator *iter);
 
 int ebNextBucket(EbucketsIterator *iter);
 
-int ebScanDefrag(ebuckets *eb, EbucketsType *type, unsigned long *cursor,
-                 ebDefragFunctions *defragfns, void *privdata);
+int ebScanDefrag(ebuckets *eb, EbucketsType *type, unsigned long *cursor, ebDefragFunctions *defragfns, void *privdata);
 
-static inline uint64_t ebGetMetaExpTime(ExpireMeta *expMeta) {
+static inline uint64_t ebGetMetaExpTime(ExpireMeta *expMeta)
+{
     return (((uint64_t)(expMeta)->expireTimeHi << 32) | (expMeta)->expireTimeLo);
 }
 
-static inline void ebSetMetaExpTime(ExpireMeta *expMeta, uint64_t t) {
-    expMeta->expireTimeLo = (uint32_t)(t&0xFFFFFFFF);
+static inline void ebSetMetaExpTime(ExpireMeta *expMeta, uint64_t t)
+{
+    expMeta->expireTimeLo = (uint32_t)(t & 0xFFFFFFFF);
     expMeta->expireTimeHi = (uint16_t)((t) >> 32);
 }
 

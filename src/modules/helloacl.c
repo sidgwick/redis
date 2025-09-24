@@ -39,9 +39,10 @@
 static RedisModuleUser *global;
 static uint64_t global_auth_client_id = 0;
 
-/* HELLOACL.REVOKE 
+/* HELLOACL.REVOKE
  * Synchronously revoke access from a user. */
-int RevokeCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RevokeCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
@@ -49,13 +50,14 @@ int RevokeCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         RedisModule_DeauthenticateAndCloseClient(ctx, global_auth_client_id);
         return RedisModule_ReplyWithSimpleString(ctx, "OK");
     } else {
-        return RedisModule_ReplyWithError(ctx, "Global user currently not used");    
+        return RedisModule_ReplyWithError(ctx, "Global user currently not used");
     }
 }
 
-/* HELLOACL.RESET 
+/* HELLOACL.RESET
  * Synchronously delete and re-create a module user. */
-int ResetCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int ResetCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
@@ -68,22 +70,24 @@ int ResetCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int
     return RedisModule_ReplyWithSimpleString(ctx, "OK");
 }
 
-/* Callback handler for user changes, use this to notify a module of 
+/* Callback handler for user changes, use this to notify a module of
  * changes to users authenticated by the module */
-void HelloACL_UserChanged(uint64_t client_id, void *privdata) {
+void HelloACL_UserChanged(uint64_t client_id, void *privdata)
+{
     REDISMODULE_NOT_USED(privdata);
     REDISMODULE_NOT_USED(client_id);
     global_auth_client_id = 0;
 }
 
-/* HELLOACL.AUTHGLOBAL 
+/* HELLOACL.AUTHGLOBAL
  * Synchronously assigns a module user to the current context. */
-int AuthGlobalCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int AuthGlobalCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
     if (global_auth_client_id) {
-        return RedisModule_ReplyWithError(ctx, "Global user currently used");    
+        return RedisModule_ReplyWithError(ctx, "Global user currently used");
     }
 
     RedisModule_AuthenticateClientWithUser(ctx, global, HelloACL_UserChanged, NULL, &global_auth_client_id);
@@ -94,7 +98,8 @@ int AuthGlobalCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
 #define TIMEOUT_TIME 1000
 
 /* Reply callback for auth command HELLOACL.AUTHASYNC */
-int HelloACL_Reply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int HelloACL_Reply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     size_t length;
@@ -102,47 +107,51 @@ int HelloACL_Reply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleString *user_string = RedisModule_GetBlockedClientPrivateData(ctx);
     const char *name = RedisModule_StringPtrLen(user_string, &length);
 
-    if (RedisModule_AuthenticateClientWithACLUser(ctx, name, length, NULL, NULL, NULL) == 
-            REDISMODULE_ERR) {
-        return RedisModule_ReplyWithError(ctx, "Invalid Username or password");    
+    if (RedisModule_AuthenticateClientWithACLUser(ctx, name, length, NULL, NULL, NULL) == REDISMODULE_ERR) {
+        return RedisModule_ReplyWithError(ctx, "Invalid Username or password");
     }
     return RedisModule_ReplyWithSimpleString(ctx, "OK");
 }
 
 /* Timeout callback for auth command HELLOACL.AUTHASYNC */
-int HelloACL_Timeout(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int HelloACL_Timeout(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     return RedisModule_ReplyWithSimpleString(ctx, "Request timedout");
 }
 
 /* Private data frees data for HELLOACL.AUTHASYNC command. */
-void HelloACL_FreeData(RedisModuleCtx *ctx, void *privdata) {
+void HelloACL_FreeData(RedisModuleCtx *ctx, void *privdata)
+{
     REDISMODULE_NOT_USED(ctx);
     RedisModule_FreeString(NULL, privdata);
 }
 
 /* Background authentication can happen here. */
-void *HelloACL_ThreadMain(void *args) {
+void *HelloACL_ThreadMain(void *args)
+{
     void **targs = args;
     RedisModuleBlockedClient *bc = targs[0];
     RedisModuleString *user = targs[1];
     RedisModule_Free(targs);
 
-    RedisModule_UnblockClient(bc,user);
+    RedisModule_UnblockClient(bc, user);
     return NULL;
 }
 
-/* HELLOACL.AUTHASYNC 
+/* HELLOACL.AUTHASYNC
  * Asynchronously assigns an ACL user to the current context. */
-int AuthAsyncCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+int AuthAsyncCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+    if (argc != 2)
+        return RedisModule_WrongArity(ctx);
 
     pthread_t tid;
-    RedisModuleBlockedClient *bc = RedisModule_BlockClient(ctx, HelloACL_Reply, HelloACL_Timeout, HelloACL_FreeData, TIMEOUT_TIME);
-    
+    RedisModuleBlockedClient *bc =
+        RedisModule_BlockClient(ctx, HelloACL_Reply, HelloACL_Timeout, HelloACL_FreeData, TIMEOUT_TIME);
 
-    void **targs = RedisModule_Alloc(sizeof(void*)*2);
+    void **targs = RedisModule_Alloc(sizeof(void *) * 2);
     targs[0] = bc;
     targs[1] = RedisModule_CreateStringFromString(NULL, argv[1]);
 
@@ -156,27 +165,26 @@ int AuthAsyncCommand_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 
 /* This function must be present on each Redis module. It is used in order to
  * register the commands into the Redis server. */
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"helloacl",1,REDISMODULE_APIVER_1)
-        == REDISMODULE_ERR) return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"helloacl.reset",
-        ResetCommand_RedisCommand,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_Init(ctx, "helloacl", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"helloacl.revoke",
-        RevokeCommand_RedisCommand,"",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "helloacl.reset", ResetCommand_RedisCommand, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"helloacl.authglobal",
-        AuthGlobalCommand_RedisCommand,"no-auth",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "helloacl.revoke", RevokeCommand_RedisCommand, "", 0, 0, 0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"helloacl.authasync",
-        AuthAsyncCommand_RedisCommand,"no-auth",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "helloacl.authglobal", AuthGlobalCommand_RedisCommand, "no-auth", 0, 0, 0) ==
+        REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "helloacl.authasync", AuthAsyncCommand_RedisCommand, "no-auth", 0, 0, 0) ==
+        REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     global = RedisModule_CreateModuleUser("global");

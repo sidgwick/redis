@@ -18,13 +18,13 @@ bool prof_mdump_impl(tsd_t *tsd, const char *filename);
 void prof_gdump_impl(tsd_t *tsd);
 
 /* Used in unit tests. */
-typedef int (prof_sys_thread_name_read_t)(char *buf, size_t limit);
+typedef int(prof_sys_thread_name_read_t)(char *buf, size_t limit);
 extern prof_sys_thread_name_read_t *JET_MUTABLE prof_sys_thread_name_read;
-typedef int (prof_dump_open_file_t)(const char *, int);
+typedef int(prof_dump_open_file_t)(const char *, int);
 extern prof_dump_open_file_t *JET_MUTABLE prof_dump_open_file;
-typedef ssize_t (prof_dump_write_file_t)(int, const void *, size_t);
+typedef ssize_t(prof_dump_write_file_t)(int, const void *, size_t);
 extern prof_dump_write_file_t *JET_MUTABLE prof_dump_write_file;
-typedef int (prof_dump_open_maps_t)();
+typedef int(prof_dump_open_maps_t)();
 extern prof_dump_open_maps_t *JET_MUTABLE prof_dump_open_maps;
 
 #endif /* JEMALLOC_INTERNAL_PROF_SYS_H */

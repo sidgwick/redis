@@ -33,24 +33,24 @@
 
 #ifndef _WIN32
 /* For POSIX systems we use the standard BSD socket API. */
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 #else
 /* For Windows we use winsock. */
 #undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0600 /* To get WSAPoll etc. */
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stddef.h>
 #include <errno.h>
 #include <mstcpip.h>
+#include <stddef.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #ifdef _MSC_VER
 typedef long long ssize_t;

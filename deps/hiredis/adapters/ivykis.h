@@ -1,52 +1,60 @@
 #ifndef __HIREDIS_IVYKIS_H__
 #define __HIREDIS_IVYKIS_H__
-#include <iv.h>
-#include "../hiredis.h"
 #include "../async.h"
+#include "../hiredis.h"
+#include <iv.h>
 
 typedef struct redisIvykisEvents {
     redisAsyncContext *context;
     struct iv_fd fd;
 } redisIvykisEvents;
 
-static void redisIvykisReadEvent(void *arg) {
+static void redisIvykisReadEvent(void *arg)
+{
     redisAsyncContext *context = (redisAsyncContext *)arg;
     redisAsyncHandleRead(context);
 }
 
-static void redisIvykisWriteEvent(void *arg) {
+static void redisIvykisWriteEvent(void *arg)
+{
     redisAsyncContext *context = (redisAsyncContext *)arg;
     redisAsyncHandleWrite(context);
 }
 
-static void redisIvykisAddRead(void *privdata) {
-    redisIvykisEvents *e = (redisIvykisEvents*)privdata;
+static void redisIvykisAddRead(void *privdata)
+{
+    redisIvykisEvents *e = (redisIvykisEvents *)privdata;
     iv_fd_set_handler_in(&e->fd, redisIvykisReadEvent);
 }
 
-static void redisIvykisDelRead(void *privdata) {
-    redisIvykisEvents *e = (redisIvykisEvents*)privdata;
+static void redisIvykisDelRead(void *privdata)
+{
+    redisIvykisEvents *e = (redisIvykisEvents *)privdata;
     iv_fd_set_handler_in(&e->fd, NULL);
 }
 
-static void redisIvykisAddWrite(void *privdata) {
-    redisIvykisEvents *e = (redisIvykisEvents*)privdata;
+static void redisIvykisAddWrite(void *privdata)
+{
+    redisIvykisEvents *e = (redisIvykisEvents *)privdata;
     iv_fd_set_handler_out(&e->fd, redisIvykisWriteEvent);
 }
 
-static void redisIvykisDelWrite(void *privdata) {
-    redisIvykisEvents *e = (redisIvykisEvents*)privdata;
+static void redisIvykisDelWrite(void *privdata)
+{
+    redisIvykisEvents *e = (redisIvykisEvents *)privdata;
     iv_fd_set_handler_out(&e->fd, NULL);
 }
 
-static void redisIvykisCleanup(void *privdata) {
-    redisIvykisEvents *e = (redisIvykisEvents*)privdata;
+static void redisIvykisCleanup(void *privdata)
+{
+    redisIvykisEvents *e = (redisIvykisEvents *)privdata;
 
     iv_fd_unregister(&e->fd);
     hi_free(e);
 }
 
-static int redisIvykisAttach(redisAsyncContext *ac) {
+static int redisIvykisAttach(redisAsyncContext *ac)
+{
     redisContext *c = &(ac->c);
     redisIvykisEvents *e;
 
@@ -55,7 +63,7 @@ static int redisIvykisAttach(redisAsyncContext *ac) {
         return REDIS_ERR;
 
     /* Create container for context and r/w events */
-    e = (redisIvykisEvents*)hi_malloc(sizeof(*e));
+    e = (redisIvykisEvents *)hi_malloc(sizeof(*e));
     if (e == NULL)
         return REDIS_ERR;
 

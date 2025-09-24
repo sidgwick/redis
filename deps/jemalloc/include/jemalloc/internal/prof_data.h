@@ -22,9 +22,9 @@ char *prof_thread_name_alloc(tsd_t *tsd, const char *thread_name);
 int prof_thread_name_set_impl(tsd_t *tsd, const char *thread_name);
 void prof_unbias_map_init();
 void prof_dump_impl(tsd_t *tsd, write_cb_t *prof_dump_write, void *cbopaque,
-    prof_tdata_t *tdata, bool leakcheck);
-prof_tdata_t * prof_tdata_init_impl(tsd_t *tsd, uint64_t thr_uid,
-    uint64_t thr_discrim, char *thread_name, bool active);
+  prof_tdata_t *tdata, bool leakcheck);
+prof_tdata_t *prof_tdata_init_impl(tsd_t *tsd, uint64_t thr_uid,
+  uint64_t thr_discrim, char *thread_name, bool active);
 void prof_tdata_detach(tsd_t *tsd, prof_tdata_t *tdata);
 void prof_reset(tsd_t *tsd, size_t lg_sample);
 void prof_tctx_try_destroy(tsd_t *tsd, prof_tctx_t *tctx);

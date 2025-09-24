@@ -30,16 +30,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "hiredis.h"
 #include "async.h"
+#include "hiredis.h"
 #include "net.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
 #ifdef _WIN32
-#include <windows.h>
 #include <wincrypt.h>
+#include <windows.h>
 #ifdef OPENSSL_IS_BORINGSSL
 #undef X509_NAME
 #undef X509_EXTENSIONS
@@ -52,12 +52,12 @@
 #include <pthread.h>
 #endif
 
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 
-#include "win32.h"
 #include "async_private.h"
 #include "hiredis_ssl.h"
+#include "win32.h"
 
 #define OPENSSL_1_1_0 0x10100000L
 
@@ -109,31 +109,38 @@ redisContextFuncs redisContextSSLFuncs;
 #ifdef HIREDIS_USE_CRYPTO_LOCKS
 #ifdef _WIN32
 typedef CRITICAL_SECTION sslLockType;
-static void sslLockInit(sslLockType* l) {
+static void sslLockInit(sslLockType *l)
+{
     InitializeCriticalSection(l);
 }
-static void sslLockAcquire(sslLockType* l) {
+static void sslLockAcquire(sslLockType *l)
+{
     EnterCriticalSection(l);
 }
-static void sslLockRelease(sslLockType* l) {
+static void sslLockRelease(sslLockType *l)
+{
     LeaveCriticalSection(l);
 }
 #else
 typedef pthread_mutex_t sslLockType;
-static void sslLockInit(sslLockType *l) {
+static void sslLockInit(sslLockType *l)
+{
     pthread_mutex_init(l, NULL);
 }
-static void sslLockAcquire(sslLockType *l) {
+static void sslLockAcquire(sslLockType *l)
+{
     pthread_mutex_lock(l);
 }
-static void sslLockRelease(sslLockType *l) {
+static void sslLockRelease(sslLockType *l)
+{
     pthread_mutex_unlock(l);
 }
 #endif
 
-static sslLockType* ossl_locks;
+static sslLockType *ossl_locks;
 
-static void opensslDoLock(int mode, int lkid, const char *f, int line) {
+static void opensslDoLock(int mode, int lkid, const char *f, int line)
+{
     sslLockType *l = ossl_locks + lkid;
 
     if (mode & CRYPTO_LOCK) {
@@ -146,7 +153,8 @@ static void opensslDoLock(int mode, int lkid, const char *f, int line) {
     (void)line;
 }
 
-static int initOpensslLocks(void) {
+static int initOpensslLocks(void)
+{
     unsigned ii, nlocks;
     if (CRYPTO_get_locking_callback() != NULL) {
         /* Someone already set the callback before us. Don't destroy it! */
@@ -182,24 +190,24 @@ int redisInitOpenSSL(void)
 const char *redisSSLContextGetError(redisSSLContextError error)
 {
     switch (error) {
-        case REDIS_SSL_CTX_NONE:
-            return "No Error";
-        case REDIS_SSL_CTX_CREATE_FAILED:
-            return "Failed to create OpenSSL SSL_CTX";
-        case REDIS_SSL_CTX_CERT_KEY_REQUIRED:
-            return "Client cert and key must both be specified or skipped";
-        case REDIS_SSL_CTX_CA_CERT_LOAD_FAILED:
-            return "Failed to load CA Certificate or CA Path";
-        case REDIS_SSL_CTX_CLIENT_CERT_LOAD_FAILED:
-            return "Failed to load client certificate";
-        case REDIS_SSL_CTX_PRIVATE_KEY_LOAD_FAILED:
-            return "Failed to load private key";
-        case REDIS_SSL_CTX_OS_CERTSTORE_OPEN_FAILED:
-            return "Failed to open system certificate store";
-        case REDIS_SSL_CTX_OS_CERT_ADD_FAILED:
-            return "Failed to add CA certificates obtained from system to the SSL context";
-        default:
-            return "Unknown error code";
+    case REDIS_SSL_CTX_NONE:
+        return "No Error";
+    case REDIS_SSL_CTX_CREATE_FAILED:
+        return "Failed to create OpenSSL SSL_CTX";
+    case REDIS_SSL_CTX_CERT_KEY_REQUIRED:
+        return "Client cert and key must both be specified or skipped";
+    case REDIS_SSL_CTX_CA_CERT_LOAD_FAILED:
+        return "Failed to load CA Certificate or CA Path";
+    case REDIS_SSL_CTX_CLIENT_CERT_LOAD_FAILED:
+        return "Failed to load client certificate";
+    case REDIS_SSL_CTX_PRIVATE_KEY_LOAD_FAILED:
+        return "Failed to load private key";
+    case REDIS_SSL_CTX_OS_CERTSTORE_OPEN_FAILED:
+        return "Failed to open system certificate store";
+    case REDIS_SSL_CTX_OS_CERT_ADD_FAILED:
+        return "Failed to add CA certificates obtained from system to the SSL context";
+    default:
+        return "Unknown error code";
     }
 }
 
@@ -221,14 +229,13 @@ void redisFreeSSLContext(redisSSLContext *ctx)
     hi_free(ctx);
 }
 
-
 /**
  * redisSSLContext helper context initialization.
  */
 
-redisSSLContext *redisCreateSSLContext(const char *cacert_filename, const char *capath,
-        const char *cert_filename, const char *private_key_filename,
-        const char *server_name, redisSSLContextError *error)
+redisSSLContext *redisCreateSSLContext(const char *cacert_filename, const char *capath, const char *cert_filename,
+                                       const char *private_key_filename, const char *server_name,
+                                       redisSSLContextError *error)
 {
     redisSSLOptions options = {
         .cacert_filename = cacert_filename,
@@ -242,7 +249,8 @@ redisSSLContext *redisCreateSSLContext(const char *cacert_filename, const char *
     return redisCreateSSLContextWithOptions(&options, error);
 }
 
-redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redisSSLContextError *error) {
+redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redisSSLContextError *error)
+{
     const char *cacert_filename = options->cacert_filename;
     const char *capath = options->capath;
     const char *cert_filename = options->cert_filename;
@@ -267,7 +275,8 @@ redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redi
 
     ctx->ssl_ctx = SSL_CTX_new(ssl_method);
     if (!ctx->ssl_ctx) {
-        if (error) *error = REDIS_SSL_CTX_CREATE_FAILED;
+        if (error)
+            *error = REDIS_SSL_CTX_CREATE_FAILED;
         goto error;
     }
 
@@ -280,8 +289,9 @@ redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redi
     SSL_CTX_set_verify(ctx->ssl_ctx, options->verify_mode, NULL);
 
     if ((cert_filename != NULL && private_key_filename == NULL) ||
-            (private_key_filename != NULL && cert_filename == NULL)) {
-        if (error) *error = REDIS_SSL_CTX_CERT_KEY_REQUIRED;
+        (private_key_filename != NULL && cert_filename == NULL)) {
+        if (error)
+            *error = REDIS_SSL_CTX_CERT_KEY_REQUIRED;
         goto error;
     }
 
@@ -290,18 +300,18 @@ redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redi
         if (0 == strcmp(cacert_filename, "wincert")) {
             win_store = CertOpenSystemStore(NULL, "Root");
             if (!win_store) {
-                if (error) *error = REDIS_SSL_CTX_OS_CERTSTORE_OPEN_FAILED;
+                if (error)
+                    *error = REDIS_SSL_CTX_OS_CERTSTORE_OPEN_FAILED;
                 goto error;
             }
-            X509_STORE* store = SSL_CTX_get_cert_store(ctx->ssl_ctx);
+            X509_STORE *store = SSL_CTX_get_cert_store(ctx->ssl_ctx);
             while (win_ctx = CertEnumCertificatesInStore(win_store, win_ctx)) {
-                X509* x509 = NULL;
-                x509 = d2i_X509(NULL, (const unsigned char**)&win_ctx->pbCertEncoded, win_ctx->cbCertEncoded);
+                X509 *x509 = NULL;
+                x509 = d2i_X509(NULL, (const unsigned char **)&win_ctx->pbCertEncoded, win_ctx->cbCertEncoded);
                 if (x509) {
-                    if ((1 != X509_STORE_add_cert(store, x509)) ||
-                        (1 != SSL_CTX_add_client_CA(ctx->ssl_ctx, x509)))
-                    {
-                        if (error) *error = REDIS_SSL_CTX_OS_CERT_ADD_FAILED;
+                    if ((1 != X509_STORE_add_cert(store, x509)) || (1 != SSL_CTX_add_client_CA(ctx->ssl_ctx, x509))) {
+                        if (error)
+                            *error = REDIS_SSL_CTX_OS_CERT_ADD_FAILED;
                         goto error;
                     }
                     X509_free(x509);
@@ -311,24 +321,28 @@ redisSSLContext *redisCreateSSLContextWithOptions(redisSSLOptions *options, redi
             CertCloseStore(win_store, 0);
         } else
 #endif
-        if (!SSL_CTX_load_verify_locations(ctx->ssl_ctx, cacert_filename, capath)) {
-            if (error) *error = REDIS_SSL_CTX_CA_CERT_LOAD_FAILED;
+            if (!SSL_CTX_load_verify_locations(ctx->ssl_ctx, cacert_filename, capath)) {
+            if (error)
+                *error = REDIS_SSL_CTX_CA_CERT_LOAD_FAILED;
             goto error;
         }
     } else {
         if (!SSL_CTX_set_default_verify_paths(ctx->ssl_ctx)) {
-            if (error) *error = REDIS_SSL_CTX_CLIENT_DEFAULT_CERT_FAILED;
+            if (error)
+                *error = REDIS_SSL_CTX_CLIENT_DEFAULT_CERT_FAILED;
             goto error;
         }
     }
 
     if (cert_filename) {
         if (!SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, cert_filename)) {
-            if (error) *error = REDIS_SSL_CTX_CLIENT_CERT_LOAD_FAILED;
+            if (error)
+                *error = REDIS_SSL_CTX_CLIENT_CERT_LOAD_FAILED;
             goto error;
         }
         if (!SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, private_key_filename, SSL_FILETYPE_PEM)) {
-            if (error) *error = REDIS_SSL_CTX_PRIVATE_KEY_LOAD_FAILED;
+            if (error)
+                *error = REDIS_SSL_CTX_PRIVATE_KEY_LOAD_FAILED;
             goto error;
         }
     }
@@ -351,8 +365,8 @@ error:
  * SSL Connection initialization.
  */
 
-
-static int redisSSLConnect(redisContext *c, SSL *ssl) {
+static int redisSSLConnect(redisContext *c, SSL *ssl)
+{
     if (c->privctx) {
         __redisSetError(c, REDIS_ERR_OTHER, "redisContext was already associated");
         return REDIS_ERR;
@@ -379,8 +393,7 @@ static int redisSSLConnect(redisContext *c, SSL *ssl) {
     }
 
     rv = SSL_get_error(rssl->ssl, rv);
-    if (((c->flags & REDIS_BLOCK) == 0) &&
-        (rv == SSL_ERROR_WANT_READ || rv == SSL_ERROR_WANT_WRITE)) {
+    if (((c->flags & REDIS_BLOCK) == 0) && (rv == SSL_ERROR_WANT_READ || rv == SSL_ERROR_WANT_WRITE)) {
         c->privctx = rssl;
         return REDIS_OK;
     }
@@ -388,11 +401,10 @@ static int redisSSLConnect(redisContext *c, SSL *ssl) {
     if (c->err == 0) {
         char err[512];
         if (rv == SSL_ERROR_SYSCALL)
-            snprintf(err,sizeof(err)-1,"SSL_connect failed: %s",strerror(errno));
+            snprintf(err, sizeof(err) - 1, "SSL_connect failed: %s", strerror(errno));
         else {
             unsigned long e = ERR_peek_last_error();
-            snprintf(err,sizeof(err)-1,"SSL_connect failed: %s",
-                    ERR_reason_error_string(e));
+            snprintf(err, sizeof(err) - 1, "SSL_connect failed: %s", ERR_reason_error_string(e));
         }
         __redisSetError(c, REDIS_ERR_IO, err);
     }
@@ -406,7 +418,8 @@ static int redisSSLConnect(redisContext *c, SSL *ssl) {
  * create their own SSL object.
  */
 
-int redisInitiateSSL(redisContext *c, SSL *ssl) {
+int redisInitiateSSL(redisContext *c, SSL *ssl)
+{
     return redisSSLConnect(c, ssl);
 }
 
@@ -451,7 +464,8 @@ error:
     return REDIS_ERR;
 }
 
-static int maybeCheckWant(redisSSL *rssl, int rv) {
+static int maybeCheckWant(redisSSL *rssl, int rv)
+{
     /**
      * If the error is WANT_READ or WANT_WRITE, the appropriate flags are set
      * and true is returned. False is returned otherwise
@@ -471,10 +485,12 @@ static int maybeCheckWant(redisSSL *rssl, int rv) {
  * Implementation of redisContextFuncs for SSL connections.
  */
 
-static void redisSSLFree(void *privctx){
+static void redisSSLFree(void *privctx)
+{
     redisSSL *rsc = privctx;
 
-    if (!rsc) return;
+    if (!rsc)
+        return;
     if (rsc->ssl) {
         SSL_free(rsc->ssl);
         rsc->ssl = NULL;
@@ -482,7 +498,8 @@ static void redisSSLFree(void *privctx){
     hi_free(rsc);
 }
 
-static ssize_t redisSSLRead(redisContext *c, char *buf, size_t bufcap) {
+static ssize_t redisSSLRead(redisContext *c, char *buf, size_t bufcap)
+{
     redisSSL *rssl = c->privctx;
 
     int nread = SSL_read(rssl->ssl, buf, bufcap);
@@ -524,7 +541,8 @@ static ssize_t redisSSLRead(redisContext *c, char *buf, size_t bufcap) {
     }
 }
 
-static ssize_t redisSSLWrite(redisContext *c) {
+static ssize_t redisSSLWrite(redisContext *c)
+{
     redisSSL *rssl = c->privctx;
 
     size_t len = rssl->lastLen ? rssl->lastLen : hi_sdslen(c->obuf);
@@ -546,7 +564,8 @@ static ssize_t redisSSLWrite(redisContext *c) {
     return rv;
 }
 
-static void redisSSLAsyncRead(redisAsyncContext *ac) {
+static void redisSSLAsyncRead(redisAsyncContext *ac)
+{
     int rv;
     redisSSL *rssl = ac->c.privctx;
     redisContext *c = &ac->c;
@@ -576,7 +595,8 @@ static void redisSSLAsyncRead(redisAsyncContext *ac) {
     }
 }
 
-static void redisSSLAsyncWrite(redisAsyncContext *ac) {
+static void redisSSLAsyncWrite(redisAsyncContext *ac)
+{
     int rv, done = 0;
     redisSSL *rssl = ac->c.privctx;
     redisContext *c = &ac->c;
@@ -606,12 +626,9 @@ static void redisSSLAsyncWrite(redisAsyncContext *ac) {
     _EL_ADD_READ(ac);
 }
 
-redisContextFuncs redisContextSSLFuncs = {
-    .close = redisNetClose,
-    .free_privctx = redisSSLFree,
-    .async_read = redisSSLAsyncRead,
-    .async_write = redisSSLAsyncWrite,
-    .read = redisSSLRead,
-    .write = redisSSLWrite
-};
-
+redisContextFuncs redisContextSSLFuncs = {.close = redisNetClose,
+                                          .free_privctx = redisSSLFree,
+                                          .async_read = redisSSLAsyncRead,
+                                          .async_write = redisSSLAsyncWrite,
+                                          .read = redisSSLRead,
+                                          .write = redisSSLWrite};

@@ -1,14 +1,16 @@
 #include "redismodule.h"
-#include <math.h>
 #include <errno.h>
+#include <math.h>
 
 /* ZSET.REM key element
  *
  * Removes an occurrence of an element from a sorted set. Replies with the
  * number of removed elements (0 or 1).
  */
-int zset_rem(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 3) return RedisModule_WrongArity(ctx);
+int zset_rem(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+    if (argc != 3)
+        return RedisModule_WrongArity(ctx);
     RedisModule_AutoMemory(ctx);
     int keymode = REDISMODULE_READ | REDISMODULE_WRITE;
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], keymode);
@@ -24,8 +26,10 @@ int zset_rem(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * Adds a specified member with the specified score to the sorted
  * set stored at key.
  */
-int zset_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 4) return RedisModule_WrongArity(ctx);
+int zset_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+    if (argc != 4)
+        return RedisModule_WrongArity(ctx);
     RedisModule_AutoMemory(ctx);
     int keymode = REDISMODULE_READ | REDISMODULE_WRITE;
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], keymode);
@@ -49,8 +53,10 @@ int zset_add(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
  * Increments the score stored at member in the sorted set stored at key by increment.
  * Replies with the new score of this element.
  */
-int zset_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 4) return RedisModule_WrongArity(ctx);
+int zset_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+    if (argc != 4)
+        return RedisModule_WrongArity(ctx);
     RedisModule_AutoMemory(ctx);
     int keymode = REDISMODULE_READ | REDISMODULE_WRITE;
     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], keymode);
@@ -69,22 +75,20 @@ int zset_incrby(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx, "ERR ZsetIncrby failed");
 }
 
-int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
     if (RedisModule_Init(ctx, "zset", 1, REDISMODULE_APIVER_1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "zset.rem", zset_rem, "write",
-                                  1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "zset.rem", zset_rem, "write", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "zset.add", zset_add, "write",
-                                  1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "zset.add", zset_add, "write", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "zset.incrby", zset_incrby, "write",
-                                  1, 1, 1) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx, "zset.incrby", zset_incrby, "write", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;
